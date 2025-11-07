@@ -227,7 +227,16 @@ export class SchedulerTimeslotEditor extends LitElement {
         else mouseX = ev.pageX;
       } else mouseX = (ev as MouseEvent).pageX;
 
-      mouseX -= trackBounds.left;
+      const isRTL = getComputedStyle(this).direction === 'rtl';
+
+      // המר את מיקום הגרירה בהתאם לכיוון הכתיבה
+      if (isRTL) {
+        mouseX = trackBounds.right - (ev instanceof TouchEvent ? ev.changedTouches[0].pageX : (ev as MouseEvent).pageX);
+      } else {
+        mouseX = (ev instanceof TouchEvent ? ev.changedTouches[0].pageX : (ev as MouseEvent).pageX) - trackBounds.left;
+      }
+
+      // ודא שגבולות המיקום תקינים
       if (mouseX > trackBounds.width) mouseX = trackBounds.width;
       if (mouseX < 0) mouseX = 0;
 
