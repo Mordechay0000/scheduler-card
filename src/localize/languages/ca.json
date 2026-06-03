@@ -1,0 +1,254 @@
+{
+  "services": {
+    "generic": {
+      "turn_on": "Encén",
+      "turn_off": "Apaga",
+      "parameter_to_value": "{parameter} a {value}",
+      "action_with_parameter": "{action} amb {parameter}"
+    },
+    "climate": {
+      "set_temperature": "estableix la temperatura[ a {temperature}]",
+      "set_temperature_hvac_mode_heat": "escalfa[ a {temperature}]",
+      "set_temperature_hvac_mode_cool": "refreda[ a {temperature}]",
+      "set_temperature_hvac_mode_heat_cool": "calor/fred[ a {temperature}]",
+      "set_temperature_hvac_mode_heat_cool_range": "calor/fred[ de {target_temp_low} a {target_temp_high}]",
+      "set_temperature_hvac_mode_auto": "automàtic[ a {temperature}]",
+      "set_hvac_mode": "estableix el mode[ a {hvac_mode}]",
+      "set_preset_mode": "estableix el preajust[ a {preset_mode}]",
+      "set_fan_mode": "estableix el mode del ventilador[ a {fan_mode}]",
+      "set_swing_mode": "estableix l'oscil·lació[ a {swing_mode}]"
+    },
+    "cover": {
+      "close_cover": "tanca",
+      "open_cover": "obre",
+      "set_cover_position": "estableix la posició[ a {position}]",
+      "set_cover_tilt_position": "estableix la inclinació[ a {tilt_position}]"
+    },
+    "fan": {
+      "set_percentage": "estableix la velocitat[ a {percentage}]",
+      "set_direction": "estableix la direcció[ a {direction}]",
+      "oscillate": "estableix l'oscil·lació[ a {oscillate}]"
+    },
+    "humidifier": {
+      "set_humidity": "estableix la humitat[ a {humidity}]",
+      "set_mode": "estableix el mode[ a {mode}]"
+    },
+    "input_number": {
+      "set_value": "estableix el valor[ a {value}]"
+    },
+    "input_select": {
+      "select_option": "selecciona l'opció[ {option}]"
+    },
+    "select": {
+      "select_option": "selecciona l'opció[ {option}]"
+    },
+    "light": {
+      "turn_on": "encén[ amb brillantor {brightness}]"
+    },
+    "media_player": {
+      "select_source": "selecciona la font[ {source}]"
+    },
+    "notify": {
+      "send_message": "envia una notificació"
+    },
+    "script": {
+      "execute": "executa"
+    },
+    "vacuum": {
+      "start_pause": "inicia / pausa"
+    },
+    "water_heater": {
+      "set_operation_mode": "estableix el mode[ a {operation_mode}]",
+      "set_away_mode": "estableix el mode absència"
+    }
+  },
+  "ui": {
+    "components": {
+      "date": {
+        "day_types_short": {
+          "daily": "diari",
+          "workdays": "feiners",
+          "weekend": "cap de setmana"
+        },
+        "day_types_long": {
+          "daily": "cada dia",
+          "workdays": "els dies feiners",
+          "weekend": "el cap de setmana"
+        },
+        "days": "dies",
+        "tomorrow": "demà",
+        "repeated_days": "cada {days}",
+        "repeated_days_except": "cada dia excepte {excludedDays}",
+        "days_range": "de {startDay} a {endDay}",
+        "next_week_day": "el proper {weekday}"
+      },
+      "time": {
+        "absolute": "a les {time}",
+        "interval": "de {startTime} a {endTime}",
+        "at_midnight": "a mitjanit",
+        "at_noon": "al migdia",
+        "at_sun_event": "a {sunEvent}"
+      }
+    },
+    "dialog": {
+      "enable_schedule": {
+        "title": "Completa les modificacions",
+        "description": "L'horari que has modificat està actualment desactivat. El vols activar?"
+      },
+      "confirm_delete": {
+        "title": "Eliminar entitat?",
+        "description": "Segur que vols eliminar aquesta entitat?"
+      },
+      "confirm_migrate": {
+        "title": "Actualitza l'horari",
+        "description": "Amb aquest canvi es perdran alguns paràmetres. Vols continuar?"
+      },
+      "weekday_picker": {
+        "title": "Dies repetits per a l'horari",
+        "choose": "Escull..."
+      },
+      "entity_picker": {
+        "title": "Escull entitats",
+        "choose": "Escull...",
+        "no_results": "No s'han trobat elements coincidents"
+      },
+      "action_picker": {
+        "title": "Escull una acció",
+        "show_all": "Mostra totes les entitats compatibles"
+      }
+    },
+    "panel": {
+      "common": {
+        "title": "Programador",
+        "new_schedule": "Nou horari",
+        "default_name": "Horari #{id}"
+      },
+      "overview": {
+        "no_entries": "No hi ha cap element per mostrar",
+        "backend_error": "No s'ha pogut connectar amb el component scheduler. Cal instal·lar-lo com a integració abans de fer servir aquesta targeta.",
+        "excluded_items": "{number} {if number is 1} element exclòs {else} elements exclosos",
+        "hide_excluded": "amaga els elements exclosos",
+        "additional_tasks": "{number} {if number is 1} tasca més {else} tasques més"
+      },
+      "editor": {
+        "repeated_days": "Dies repetits",
+        "start_time": "Hora d'inici",
+        "stop_time": "Hora de fi",
+        "action": "Acció",
+        "add_action": "Afegeix acció",
+        "select_timeslot": "Selecciona una franja horària",
+        "toggle_single_mode": "Canvia a mode simple",
+        "toggle_scheme_mode": "Canvia a mode esquema",
+        "validation_errors": {
+          "overlapping_time": "L'horari té franges superposades",
+          "missing_target_entity": "A una o més accions els falta una entitat de destinació",
+          "missing_service_parameter": "A una o més accions els falta un paràmetre obligatori",
+          "missing_action": "L'horari no té cap acció"
+        }
+      },
+      "options": {
+        "conditions": {
+          "header": "Condicions",
+          "add_condition": "Afegeix condició",
+          "new_condition": "Nova condició",
+          "types": {
+            "equal_to": "{entity} és igual a {value}",
+            "unequal_to": "{entity} és diferent de {value}",
+            "above": "{entity} és superior a {value}",
+            "below": "{entity} és inferior a {value}"
+          },
+          "options": {
+            "logic_and": "Totes les condicions han de ser certes",
+            "logic_or": "Qualsevol condició ha de ser certa",
+            "track_changes": "Torna a avaluar quan canviïn les condicions"
+          }
+        },
+        "period": {
+          "header": "Període",
+          "start_date": "Des de",
+          "end_date": "Fins a"
+        },
+        "repeat_type": "comportament en finalitzar",
+        "tags": "Etiquetes"
+      },
+      "card_editor": {
+        "tabs": {
+          "entities": "Entitats",
+          "other": "Altres"
+        },
+        "fields": {
+          "title": {
+            "heading": "Títol de la targeta",
+            "options": {
+              "standard": "estàndard",
+              "hidden": "ocult",
+              "custom": "personalitzat"
+            },
+            "custom_title": "Títol personalitzat"
+          },
+          "discover_existing": {
+            "heading": "Mostra tots els horaris",
+            "description": "Això defineix el paràmetre 'discover existing'. Els horaris creats prèviament s'afegiran automàticament a la targeta."
+          },
+          "time_step": {
+            "heading": "Pas de temps",
+            "description": "Resolució (en minuts) per crear horaris",
+            "unit_minutes": "min"
+          },
+          "default_editor": {
+            "heading": "Editor horari per defecte",
+            "options": {
+              "single": "Mode horari simple",
+              "scheme": "Mode esquema horari"
+            }
+          },
+          "sort_by": {
+            "heading": "Opcions d'ordenació",
+            "description": "Ordre en què apareixen els horaris a la targeta",
+            "options": {
+              "relative_time": "Temps restant fins a la següent acció",
+              "title": "Títol visible de l'horari",
+              "state": "Mostra primer els horaris actius"
+            }
+          },
+          "display_format_primary": {
+            "heading": "Informació principal mostrada",
+            "description": "Configura quina etiqueta es fa servir per als horaris a la vista general",
+            "options": {
+              "default": "Nom de l'horari",
+              "entity_action": "Resum de la tasca"
+            }
+          },
+          "display_format_secondary": {
+            "heading": "Informació secundària mostrada",
+            "description": "Configura quines propietats addicionals són visibles a la vista general",
+            "options": {
+              "relative_time": "Temps restant fins a la següent acció",
+              "time": "Hora configurada per a la següent acció",
+              "days": "Dies repetits de la setmana",
+              "additional_tasks": "Nombre de tasques addicionals"
+            }
+          },
+          "show_header_toggle": {
+            "heading": "Mostra l'interruptor de capçalera",
+            "description": "Mostra l'interruptor a la part superior de la targeta per activar/desactivar totes les entitats"
+          },
+          "show_toggle_switches": {
+            "heading": "Mostra interruptors",
+            "description": "Mostra un interruptor per a cada horari individual de la targeta"
+          },
+          "tags": {
+            "heading": "Etiquetes",
+            "description": "Fes servir etiquetes per dividir els horaris entre múltiples targetes"
+          },
+          "entities": {
+            "button_label": "Configura les entitats incloses",
+            "heading": "Entitats incloses",
+            "description": "Selecciona les entitats que vols controlar amb el programador. Pots fer clic a un grup per obrir-lo. Tingues en compte que algunes entitats, com ara els sensors, només es poden fer servir per a condicions, no per a accions.",
+            "included_number": "{number}/{total} seleccionades"
+          }
+        }
+      }
+    }
+  }
+}
