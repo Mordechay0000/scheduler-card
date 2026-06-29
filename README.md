@@ -45,7 +45,7 @@
 This is a Lovelace card for Home Assistant that can be used to create a time schedule for your smart devices.
 You can create new rules, modify existing rules and temporarily disable rules.
 
-The card works on top of the [scheduler custom component](https://github.com/nielsfaber/scheduler-component). You *will* that as well.
+The card works on top of the [scheduler custom component](https://github.com/nielsfaber/scheduler-component). You *will* need that as well.
 
 See it in action:
 
