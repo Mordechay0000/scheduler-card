@@ -86,13 +86,57 @@ export class SchedulerTimeslotEditor extends LitElement {
       }
     });
     this._resizeObserver.observe(this);
+    window.addEventListener('keydown', this._handleKeyDown);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this._resizeObserver?.disconnect();
     if (this._zoomAnimationFrame) cancelAnimationFrame(this._zoomAnimationFrame);
+    window.removeEventListener('keydown', this._handleKeyDown);
   }
+
+  private _handleKeyDown = (ev: KeyboardEvent) => {
+    if (ev.key !== 'Delete' && ev.key !== 'Backspace') return;
+    if (this.selectedSlot === null || !this.schedule) return;
+    // Never hijack Delete/Backspace from an input field elsewhere in the
+    // dialog (e.g. the time pickers).
+    const origin = ev.composedPath()[0];
+    if (origin instanceof HTMLElement
+      && (['input', 'textarea', 'select'].includes(origin.tagName.toLowerCase()) || origin.isContentEditable)) return;
+
+    // Deleting the not-yet-confirmed carved slot is just a revert.
+    if (this.pendingSlot !== null && this.selectedSlot === this.pendingSlot) {
+      ev.preventDefault();
+      this._revertPendingSlot(null);
+      this.selectedSlot = null;
+      this.dispatchEvent(new CustomEvent('update', { detail: { selectedSlot: null } }));
+      return;
+    }
+
+    const slots = this.schedule.slots;
+    if (slots.length <= 2) return;
+    ev.preventDefault();
+
+    // Remove the slot by merging its range into a neighbour, mirroring the
+    // panel's trash-button behaviour (remove_timeslot.ts).
+    const slotIdx = this.selectedSlot;
+    const cutIndex = slotIdx === slots.length - 1 ? slotIdx - 1 : slotIdx;
+    const newSlots = [
+      ...slots.slice(0, cutIndex),
+      {
+        ...slots[cutIndex + 1],
+        start: slots[cutIndex].start,
+        stop: slots[cutIndex + 1].stop!,
+      },
+      ...slots.slice(cutIndex + 2),
+    ];
+
+    this.schedule = { ...this.schedule, slots: newSlots };
+    this.selectedSlot = null;
+    this.dispatchEvent(new CustomEvent('update', { detail: { slots: newSlots } }));
+    this.dispatchEvent(new CustomEvent('update', { detail: { selectedSlot: null } }));
+  };
 
   private _clampPan(panPx: number, zoom: number) {
     const maxPan = Math.max(0, this._width * zoom - this._width);
@@ -524,7 +568,19 @@ export class SchedulerTimeslotEditor extends LitElement {
     const slotWidths = this.computeSlotWidths();
     const amPm = useAmPm(this.hass.locale);
 
-    type Boundary = { position: number; label: string; align: 'start' | 'middle' | 'end' };
+    // Each boundary label is tinted like the slot that STARTS at it, so the
+    // time reads as "this is when that color takes effect". The final
+    // (end-of-day) boundary has no starting slot and takes the ending
+    // slot's color instead.
+    const slotState = (slot: Timeslot): string => {
+      if (this.pendingSlot !== null && slots[this.pendingSlot] === slot) return 'pending';
+      if (!slot.actions.length) return 'empty';
+      if (isOffAction(slot.actions[0])) return 'off';
+      if (isOnAction(slot.actions[0])) return 'on';
+      return '';
+    };
+
+    type Boundary = { position: number; label: string; align: 'start' | 'middle' | 'end'; state: string };
     const boundaries: Boundary[] = [];
 
     let cursor = 0; // leading edge of the current slot's own box
@@ -534,6 +590,7 @@ export class SchedulerTimeslotEditor extends LitElement {
           position: cursor,
           label: timeToString(parseTimeString(slot.start), { seconds: false, am_pm: amPm }),
           align: 'start',
+          state: slotState(slot),
         });
       }
 
@@ -547,6 +604,7 @@ export class SchedulerTimeslotEditor extends LitElement {
           position: boxEnd,
           label: timeToString(parseTimeString(slot.stop), { seconds: false, am_pm: amPm }),
           align: isLast ? 'end' : 'middle',
+          state: isLast ? slotState(slot) : slotState(slots[i + 1]),
         });
       }
 
@@ -599,7 +657,7 @@ export class SchedulerTimeslotEditor extends LitElement {
       ...(b.align === 'middle' ? { transform: `translateX(${centerShift})` } : {}),
     })}
           >
-            <span class="boundary-label">${b.label}</span>
+            <span class="boundary-label ${b.state}">${b.label}</span>
             <span
               class="boundary-line"
               style=${styleMap({ height: `${baseLineHeight + tiers[i] * tierStep}px` })}
@@ -861,6 +919,18 @@ export class SchedulerTimeslotEditor extends LitElement {
         white-space: nowrap;
         color: var(--primary-text-color);
         margin-bottom: 3px;
+      }
+      .boundary-label.on {
+        color: rgb(var(--rgb-state-active-color, 67, 160, 71));
+      }
+      .boundary-label.off {
+        color: rgb(211, 47, 47);
+      }
+      .boundary-label.empty {
+        color: var(--secondary-text-color);
+      }
+      .boundary-label.pending {
+        color: rgb(156, 39, 176);
       }
       .boundary-line {
         display: block;
