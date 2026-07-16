@@ -209,14 +209,22 @@ export class SchedulerTimeslotEditor extends LitElement {
       return tier;
     });
 
+    // `inset-inline-start` mirrors correctly under RTL, but `translateX(-50%)`
+    // is a physical transform: it always shifts left, so under RTL (where the
+    // inline-start edge is the box's own right edge) it doubles the offset
+    // instead of centering it. Flip the sign to compensate.
+    const isRtl = getComputedStyle(this).direction === 'rtl';
+    const centerShift = isRtl ? '50%' : '-50%';
+
     return boundaries.map((b, i) => html`
       <div
         class="boundary ${b.align} ${tiers[i] === 1 ? 'raised' : ''}"
-        style=${styleMap(
-      b.align === 'end'
+        style=${styleMap({
+      ...(b.align === 'end'
         ? { insetInlineEnd: `${this._width - b.position}px` }
-        : { insetInlineStart: `${b.position}px` }
-    )}
+        : { insetInlineStart: `${b.position}px` }),
+      ...(b.align === 'middle' ? { transform: `translateX(${centerShift})` } : {}),
+    })}
       >
         <span class="boundary-label">${b.label}</span>
         <span class="boundary-line"></span>
@@ -419,9 +427,6 @@ export class SchedulerTimeslotEditor extends LitElement {
       }
       .boundary.end {
         align-items: flex-end;
-      }
-      .boundary.middle {
-        transform: translateX(-50%);
       }
       .boundary-label {
         font-size: 0.7rem;
