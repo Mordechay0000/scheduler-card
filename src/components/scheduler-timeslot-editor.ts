@@ -55,8 +55,13 @@ export class SchedulerTimeslotEditor extends LitElement {
 
   render() {
     return html`
-      <div class="bar">
-        ${this.renderTimeslots()}
+      <div class="slots-wrapper">
+        <div class="boundaries">
+          ${this.renderBoundaries()}
+        </div>
+        <div class="bar">
+          ${this.renderTimeslots()}
+        </div>
       </div>
       <div class="time-bar">
         ${this.renderTimebar()}
@@ -151,6 +156,55 @@ export class SchedulerTimeslotEditor extends LitElement {
         ` : ''}
       `;
     });
+  }
+
+  renderBoundaries() {
+    if (!this._width) return html``;
+
+    const slots = this.schedule!.slots;
+    const slotWidths = this.computeSlotWidths();
+    const amPm = useAmPm(this.hass.locale);
+
+    type Boundary = { position: number; label: string; align: 'start' | 'middle' | 'end' };
+    const boundaries: Boundary[] = [];
+
+    let offset = 0;
+    slots.forEach((slot, i) => {
+      if (i === 0) {
+        boundaries.push({
+          position: 0,
+          label: timeToString(parseTimeString(slot.start), { seconds: false, am_pm: amPm }),
+          align: 'start',
+        });
+      }
+      offset += slotWidths[i];
+      const isLast = i === slots.length - 1;
+      if (!isLast) offset += 3;
+
+      // A slot without a stop visually merges into the next one, so its
+      // boundary is not a real time and should not get a marker.
+      if (slot.stop !== undefined) {
+        boundaries.push({
+          position: offset,
+          label: timeToString(parseTimeString(slot.stop), { seconds: false, am_pm: amPm }),
+          align: isLast ? 'end' : 'middle',
+        });
+      }
+    });
+
+    return boundaries.map(b => html`
+      <div
+        class="boundary ${b.align}"
+        style=${styleMap(
+      b.align === 'end'
+        ? { right: `${this._width - b.position}px` }
+        : { left: `${b.position}px` }
+    )}
+      >
+        <span class="boundary-label">${b.label}</span>
+        <span class="boundary-line"></span>
+      </div>
+    `);
   }
 
   computeSlotWidths() {
@@ -325,6 +379,45 @@ export class SchedulerTimeslotEditor extends LitElement {
         display: block;
         max-width: 100%;
         overflow: hidden;
+      }
+      .slots-wrapper {
+        width: 100%;
+        position: relative;
+      }
+      .boundaries {
+        position: relative;
+        width: 100%;
+        height: 22px;
+      }
+      .boundary {
+        position: absolute;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        pointer-events: none;
+      }
+      .boundary.start {
+        align-items: flex-start;
+      }
+      .boundary.end {
+        align-items: flex-end;
+      }
+      .boundary.middle {
+        transform: translateX(-50%);
+      }
+      .boundary-label {
+        font-size: 0.7rem;
+        line-height: 1;
+        white-space: nowrap;
+        color: var(--secondary-text-color);
+        margin-bottom: 3px;
+      }
+      .boundary-line {
+        display: block;
+        width: 1px;
+        height: 6px;
+        background: var(--divider-color, rgba(127, 127, 127, 0.5));
       }
       .bar {
         width: 100%;
