@@ -135,7 +135,7 @@ export class SchedulerTimeslotEditor extends LitElement {
             </div>`}
           ${slot.actions.length
           ? actionText && (slotWidth > textWidth / 3 || slotWidth > 50) && slotWidth > 30
-            ? html`<span style="margin-left: ${leftMargin}px; margin-right: ${rightMargin}px">${actionText}</span>`
+            ? html`<span style="margin-inline-start: ${leftMargin}px; margin-inline-end: ${rightMargin}px">${actionText}</span>`
             : slotWidth > 16
               ? html`<ha-icon icon="${computeActionIcon(slot.actions[0], this.config.customize)}"></ha-icon>`
               : ''
@@ -192,13 +192,28 @@ export class SchedulerTimeslotEditor extends LitElement {
       }
     });
 
-    return boundaries.map(b => html`
+    // Rough estimate of a label's rendered width, used to detect when two
+    // neighbouring labels would overlap so one of them can be raised to a
+    // second tier instead of clashing.
+    const estimateLabelWidth = (label: string) => label.length * 6 + 6;
+
+    const tierEdge = [-Infinity, -Infinity];
+    const tiers = boundaries.map(b => {
+      const labelWidth = estimateLabelWidth(b.label);
+      const startEdge = b.align === 'end' ? b.position - labelWidth : b.position - labelWidth / 2;
+      const endEdge = b.align === 'start' ? b.position + labelWidth : b.position + labelWidth / 2;
+      const tier = startEdge > tierEdge[0] ? 0 : 1;
+      tierEdge[tier] = Math.max(tierEdge[tier], endEdge);
+      return tier;
+    });
+
+    return boundaries.map((b, i) => html`
       <div
-        class="boundary ${b.align}"
+        class="boundary ${b.align} ${tiers[i] === 1 ? 'raised' : ''}"
         style=${styleMap(
       b.align === 'end'
-        ? { right: `${this._width - b.position}px` }
-        : { left: `${b.position}px` }
+        ? { insetInlineEnd: `${this._width - b.position}px` }
+        : { insetInlineStart: `${b.position}px` }
     )}
       >
         <span class="boundary-label">${b.label}</span>
@@ -387,7 +402,7 @@ export class SchedulerTimeslotEditor extends LitElement {
       .boundaries {
         position: relative;
         width: 100%;
-        height: 22px;
+        height: 34px;
       }
       .boundary {
         position: absolute;
@@ -419,6 +434,9 @@ export class SchedulerTimeslotEditor extends LitElement {
         height: 6px;
         background: var(--divider-color, rgba(127, 127, 127, 0.5));
       }
+      .boundary.raised .boundary-line {
+        height: 20px;
+      }
       .bar {
         width: 100%;
         height: 60px;
@@ -435,10 +453,10 @@ export class SchedulerTimeslotEditor extends LitElement {
         white-space: nowrap;
       }
       .time-bar span.left {
-        justify-content: left;
+        justify-content: flex-start;
       }
       .time-bar span.right {
-        justify-content: right;
+        justify-content: flex-end;
       }
 
       .slot {
@@ -453,7 +471,7 @@ export class SchedulerTimeslotEditor extends LitElement {
         justify-content: center;
         word-break: break-all;
         white-space: normal;
-        margin-right: 3px;
+        margin-inline-end: 3px;
       }
       .slot:hover {
         background: rgba(var(--rgb-primary-color), 0.85);
@@ -465,11 +483,13 @@ export class SchedulerTimeslotEditor extends LitElement {
         border: 3px solid rgba(var(--rgb-primary-color), 1);
       }
       .slot:first-child {
-        border-radius: 10px 0px 0px 10px;
+        border-start-start-radius: 10px;
+        border-end-start-radius: 10px;
       }
       .slot:last-child {
-        border-radius: 0px 10px 10px 0px;
-        margin-right: 0px;
+        border-start-end-radius: 10px;
+        border-end-end-radius: 10px;
+        margin-inline-end: 0px;
       }
       .slot.on {
         background: rgba(var(--rgb-state-active-color, 67, 160, 71), 0.75);
@@ -544,8 +564,8 @@ export class SchedulerTimeslotEditor extends LitElement {
         align-content: center;
         align-items: center;
         justify-content: center;
-        margin-left: -18px;
-        margin-right: -18px;
+        margin-inline-start: -18px;
+        margin-inline-end: -18px;
         visibility: visible;
       }
       .handle.hidden {
@@ -562,10 +582,10 @@ export class SchedulerTimeslotEditor extends LitElement {
       .handle ha-icon-button {
         --mdc-icon-button-size: 36px;
         margin-top: -12px;
-        margin-left: -12px;
+        margin-inline-start: -12px;
       }
       .handle.center span {
-        margin-right: -2px;
+        margin-inline-end: -2px;
       }
     `;
   }
