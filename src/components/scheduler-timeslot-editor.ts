@@ -168,28 +168,30 @@ export class SchedulerTimeslotEditor extends LitElement {
     type Boundary = { position: number; label: string; align: 'start' | 'middle' | 'end' };
     const boundaries: Boundary[] = [];
 
-    let offset = 0;
+    let cursor = 0; // leading edge of the current slot's own box
     slots.forEach((slot, i) => {
       if (i === 0) {
         boundaries.push({
-          position: 0,
+          position: cursor,
           label: timeToString(parseTimeString(slot.start), { seconds: false, am_pm: amPm }),
           align: 'start',
         });
       }
-      offset += slotWidths[i];
+
+      const boxEnd = cursor + slotWidths[i];
       const isLast = i === slots.length - 1;
-      if (!isLast) offset += 3;
 
       // A slot without a stop visually merges into the next one, so its
       // boundary is not a real time and should not get a marker.
       if (slot.stop !== undefined) {
         boundaries.push({
-          position: offset,
+          position: boxEnd,
           label: timeToString(parseTimeString(slot.stop), { seconds: false, am_pm: amPm }),
           align: isLast ? 'end' : 'middle',
         });
       }
+
+      cursor = boxEnd + (isLast ? 0 : 3);
     });
 
     // Rough estimate of a label's rendered width, used to detect when two
