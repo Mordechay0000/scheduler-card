@@ -1,7 +1,8 @@
 import { LitElement, html, css, CSSResultGroup } from 'lit';
 import { property, customElement, state } from 'lit/decorators.js';
 import { styleMap } from 'lit/directives/style-map.js';
-import { CardConfig, ScheduleEntry, Time, TimeMode } from '../types';
+import { CardConfig, ScheduleEntry, Time, TimeMode, Timeslot } from '../types';
+import { carveTimeslot } from '../data/schedule/carve_timeslot';
 import { mdiUnfoldMoreVertical } from '@mdi/js';
 import { roundTime } from '../data/time/round_time';
 import { timeToString } from '../data/time/time_to_string';
@@ -17,6 +18,12 @@ import { addTimeOffset } from '../data/time/add_time_offset';
 import { DEFAULT_TIME_STEP } from '../const';
 
 const SEC_PER_DAY = 24 * 3600;
+
+const tsLabel = (ts: number, amPm: boolean) => {
+  const hours = Math.floor(ts / 3600);
+  const minutes = Math.round((ts - hours * 3600) / 60);
+  return timeToString({ mode: TimeMode.Fixed, hours, minutes }, { seconds: false, am_pm: amPm });
+};
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 48; // 1440min / 48 = 30min visible at max zoom
@@ -46,6 +53,19 @@ export class SchedulerTimeslotEditor extends LitElement {
   private _panDrag?: { pointerId: number; startX: number; startPanPx: number };
 
   private _pinch?: { distance: number; midpointX: number; panPx: number; zoom: number };
+
+  // Drag-to-create state: dragging across the bar carves out a new slot.
+  private _createDrag?: { startClientX: number; ts0: number; active: boolean };
+
+  @state() private _createRange?: { ts0: number; ts1: number };
+
+  // A slot carved by drag but not yet given an action. It reverts (restoring
+  // the original slot layout) if the user moves focus to another slot.
+  @state() pendingSlot: number | null = null;
+
+  private _slotsBackup?: Timeslot[];
+
+  private _suppressNextClick = false;
 
   @property({ type: Boolean })
   large = false;
@@ -227,6 +247,115 @@ export class SchedulerTimeslotEditor extends LitElement {
     if (ev.touches.length < 2) this._pinch = undefined;
   }
 
+  private get _dragStepSize() {
+    return this._zoom >= MINUTE_DRAG_ZOOM_THRESHOLD ? 1 : (this.config.time_step || DEFAULT_TIME_STEP);
+  }
+
+  private _clientXToTs(clientX: number, snap = true) {
+    const bar = this.shadowRoot!.querySelector('.bar') as HTMLElement;
+    const bounds = bar.getBoundingClientRect();
+    const isRtl = getComputedStyle(this).direction === 'rtl';
+    let x = isRtl ? bounds.right - clientX : clientX - bounds.left;
+    if (x < 0) x = 0;
+    if (x > bounds.width) x = bounds.width;
+    let ts = Math.round((x / bounds.width) * SEC_PER_DAY);
+    if (snap) {
+      const stepSec = this._dragStepSize * 60;
+      ts = Math.round(ts / stepSec) * stepSec;
+    }
+    return ts;
+  }
+
+  private _handleCreateDragStart(ev: PointerEvent) {
+    // Only primary button, only directly on a slot's surface (the resize
+    // handles and their buttons manage their own dragging).
+    if (ev.button !== 0) return;
+    const target = ev.target as HTMLElement;
+    if (!target.closest('.slot')) return;
+    if (this._pinch) return;
+    this._createDrag = {
+      startClientX: ev.clientX,
+      ts0: this._clientXToTs(ev.clientX),
+      active: false,
+    };
+
+    const moveHandler = (mv: PointerEvent) => {
+      if (!this._createDrag) return;
+      if (!this._createDrag.active && Math.abs(mv.clientX - this._createDrag.startClientX) < 5) return;
+      this._createDrag.active = true;
+      const ts = this._clientXToTs(mv.clientX);
+      const ts0 = Math.min(this._createDrag.ts0, ts);
+      const ts1 = Math.max(this._createDrag.ts0, ts);
+      this._createRange = { ts0, ts1 };
+    };
+    const upHandler = () => {
+      window.removeEventListener('pointermove', moveHandler);
+      window.removeEventListener('pointerup', upHandler);
+      window.removeEventListener('pointercancel', upHandler);
+      const drag = this._createDrag;
+      this._createDrag = undefined;
+      const range = this._createRange;
+      this._createRange = undefined;
+      if (!drag?.active || !range) return;
+      // A drag happened: the click event that follows must not toggle
+      // slot selection.
+      this._suppressNextClick = true;
+      const stepSec = this._dragStepSize * 60;
+      if (range.ts1 - range.ts0 < stepSec) return;
+      this._commitCreate(range.ts0, range.ts1);
+    };
+    window.addEventListener('pointermove', moveHandler);
+    window.addEventListener('pointerup', upHandler);
+    window.addEventListener('pointercancel', upHandler);
+  }
+
+  private _commitCreate(ts0: number, ts1: number) {
+    const oldSlots = [...this.schedule!.slots];
+    const [slots, newIdx] = carveTimeslot(oldSlots, ts0, ts1, this.hass);
+
+    // Nested carve while a previous pending slot is still empty: revert to
+    // the original layout first so a stray drag can't stack empty slots.
+    this._slotsBackup = this.pendingSlot !== null && this._slotsBackup ? this._slotsBackup : oldSlots;
+    this.pendingSlot = newIdx;
+    this.selectedSlot = newIdx;
+
+    this.schedule = { ...this.schedule!, slots: slots };
+    this.dispatchEvent(new CustomEvent('update', { detail: { slots: slots } }));
+    this.dispatchEvent(new CustomEvent('update', { detail: { selectedSlot: newIdx } }));
+  }
+
+  private _revertPendingSlot(clickedIdx: number | null): number | null {
+    const backup = this._slotsBackup!;
+    // Map the clicked slot (post-carve indices) back to the restored layout
+    // by locating the slot whose range covers the clicked slot's start time.
+    let restoredIdx: number | null = null;
+    if (clickedIdx !== null && this.schedule!.slots[clickedIdx]) {
+      const clickedTs = computeTimestamp(this.schedule!.slots[clickedIdx].start, this.hass);
+      restoredIdx = backup.findIndex((slot, i) => {
+        const start = computeTimestamp(slot.start, this.hass);
+        let stop = slot.stop !== undefined
+          ? (computeTimestamp(slot.stop, this.hass) || SEC_PER_DAY)
+          : (i + 1 < backup.length ? computeTimestamp(backup[i + 1].start, this.hass) : SEC_PER_DAY);
+        return clickedTs >= start && clickedTs < stop;
+      });
+      if (restoredIdx === -1) restoredIdx = null;
+    }
+
+    this.pendingSlot = null;
+    this._slotsBackup = undefined;
+    this.schedule = { ...this.schedule!, slots: backup };
+    this.dispatchEvent(new CustomEvent('update', { detail: { slots: backup } }));
+    return restoredIdx;
+  }
+
+  willUpdate() {
+    // Once the pending slot has been given an action it becomes permanent.
+    if (this.pendingSlot !== null && (this.schedule?.slots[this.pendingSlot]?.actions?.length || 0) > 0) {
+      this.pendingSlot = null;
+      this._slotsBackup = undefined;
+    }
+  }
+
   render() {
     const zoomPct = Math.round(this._zoom * 100);
 
@@ -262,8 +391,9 @@ export class SchedulerTimeslotEditor extends LitElement {
         >
           <div class="slots-wrapper" style=${styleMap({ direction: trueDirection })}>
             ${this.renderBoundaries()}
-            <div class="bar">
+            <div class="bar" @pointerdown=${this._handleCreateDragStart}>
               ${this.renderTimeslots()}
+              ${this.renderCreateOverlay()}
             </div>
           </div>
           <div
@@ -333,7 +463,7 @@ export class SchedulerTimeslotEditor extends LitElement {
 
       return html`
         <div
-          class="slot ${this.selectedSlot == i ? 'selected' : ''} ${slot.actions.length ? actionState : 'empty'} ${slot.stop === undefined ? 'short' : ''}"
+          class="slot ${this.selectedSlot == i ? 'selected' : ''} ${slot.actions.length ? actionState : 'empty'} ${slot.stop === undefined ? 'short' : ''} ${this.pendingSlot === i ? 'pending' : ''}"
           style="${styleMap({ width: `${slotWidths[i]}px` })}"
           @click=${this._toggleSelectTimeslot}
           idx="${i}"
@@ -368,6 +498,23 @@ export class SchedulerTimeslotEditor extends LitElement {
         ` : ''}
       `;
     });
+  }
+
+  renderCreateOverlay() {
+    if (!this._createRange) return '';
+    const { ts0, ts1 } = this._createRange;
+    const startPx = (ts0 / SEC_PER_DAY) * this._contentWidth;
+    const widthPx = ((ts1 - ts0) / SEC_PER_DAY) * this._contentWidth;
+    const amPm = useAmPm(this.hass.locale);
+    const label = `${tsLabel(ts0, amPm)} - ${tsLabel(ts1, amPm)}`;
+    return html`
+      <div
+        class="create-overlay"
+        style=${styleMap({ insetInlineStart: `${startPx}px`, width: `${widthPx}px` })}
+      >
+        ${widthPx > 80 ? html`<span>${label}</span>` : ''}
+      </div>
+    `;
   }
 
   renderBoundaries() {
@@ -500,13 +647,30 @@ export class SchedulerTimeslotEditor extends LitElement {
   }
 
   _toggleSelectTimeslot(ev: Event) {
+    ev.stopPropagation();
+    // A drag-to-create gesture just ended on this slot; don't treat it as
+    // a selection click.
+    if (this._suppressNextClick) {
+      this._suppressNextClick = false;
+      return;
+    }
     let slot = ev.target as HTMLElement;
     if (slot.tagName.toLowerCase() != 'div') slot = slot.parentElement as HTMLElement;
-    const num = Number(slot.getAttribute("idx"));
+    let num: number | null = Number(slot.getAttribute("idx"));
+
+    // Moving focus away from a still-empty carved slot discards it and
+    // restores the original layout. The clicked index is re-mapped into the
+    // restored layout and selected directly (no toggle: the old selection
+    // index belongs to the discarded layout, so comparing would be bogus).
+    if (this.pendingSlot !== null && num !== this.pendingSlot && !this.schedule!.slots[this.pendingSlot].actions.length) {
+      this.selectedSlot = this._revertPendingSlot(num);
+      this.dispatchEvent(new CustomEvent('update', { detail: { selectedSlot: this.selectedSlot } }));
+      return;
+    }
+
     this.selectedSlot = this.selectedSlot !== num ? num : null;
     const myEvent = new CustomEvent('update', { detail: { selectedSlot: this.selectedSlot } });
     this.dispatchEvent(myEvent);
-    ev.stopPropagation();
   }
 
   _handleDragStart(ev: MouseEvent | TouchEvent) {
@@ -708,6 +872,37 @@ export class SchedulerTimeslotEditor extends LitElement {
         width: 100%;
         height: 60px;
         display: flex;
+        position: relative;
+      }
+      .create-overlay {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        box-sizing: border-box;
+        background: rgba(var(--rgb-secondary-text-color), 0.45);
+        border: 2px solid rgb(156, 39, 176);
+        border-radius: 4px;
+        pointer-events: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 3;
+      }
+      .create-overlay span {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--primary-text-color);
+        white-space: nowrap;
+      }
+      .slot.pending {
+        background: rgba(var(--rgb-secondary-text-color), 0.5);
+        border: 2px solid rgb(156, 39, 176);
+      }
+      .slot.pending:hover {
+        background: rgba(var(--rgb-secondary-text-color), 0.65);
+      }
+      .slot.pending.selected {
+        border: 3px solid rgb(156, 39, 176);
       }
       .time-bar {
         width: 100%;
