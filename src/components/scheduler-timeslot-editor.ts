@@ -7,6 +7,7 @@ import { roundTime } from '../data/time/round_time';
 import { timeToString } from '../data/time/time_to_string';
 import { computeActionIcon } from '../data/format/compute_action_icon';
 import { formatActionDisplay } from '../data/format/format_action_display';
+import { isOffAction, isOnAction } from '../data/format/is_off_action';
 import { parseTimeString } from '../data/time/parse_time_string';
 import { computeTimestamp } from '../data/time/compute_timestamp';
 import { HomeAssistant } from '../lib/types';
@@ -109,10 +110,13 @@ export class SchedulerTimeslotEditor extends LitElement {
       const rightMargin = i < (slots.length - 1) ? 15 : 0;
       const slotWidth = slotWidths[i] - leftMargin - rightMargin;
       const nextSlot = slots[i + 1];
+      const actionState = slot.actions.length
+        ? isOffAction(slot.actions[0]) ? 'off' : isOnAction(slot.actions[0]) ? 'on' : ''
+        : '';
 
       return html`
         <div
-          class="slot ${this.selectedSlot == i ? 'selected' : ''} ${slot.actions.length ? '' : 'empty'} ${slot.stop === undefined ? 'short' : ''}"
+          class="slot ${this.selectedSlot == i ? 'selected' : ''} ${slot.actions.length ? actionState : 'empty'} ${slot.stop === undefined ? 'short' : ''}"
           style="${styleMap({ width: `${slotWidths[i]}px` })}"
           @click=${this._toggleSelectTimeslot}
           idx="${i}"
@@ -347,7 +351,7 @@ export class SchedulerTimeslotEditor extends LitElement {
       .slot {
         display: flex;
         height: 100%;
-        box-sizing: border-box; 
+        box-sizing: border-box;
         cursor: pointer;
         background: rgba(var(--rgb-primary-color), 0.7);
         color: var(--text-primary-color);
@@ -374,6 +378,30 @@ export class SchedulerTimeslotEditor extends LitElement {
         border-radius: 0px 10px 10px 0px;
         margin-right: 0px;
       }
+      .slot.on {
+        background: rgba(var(--rgb-state-active-color, 67, 160, 71), 0.75);
+      }
+      .slot.on:hover {
+        background: rgba(var(--rgb-state-active-color, 67, 160, 71), 0.9);
+      }
+      .slot.on.selected {
+        border: 3px solid rgba(var(--rgb-state-active-color, 67, 160, 71), 0.9);
+      }
+      .slot.on.selected:hover {
+        border: 3px solid rgba(var(--rgb-state-active-color, 67, 160, 71), 1);
+      }
+      .slot.off {
+        background: rgba(211, 47, 47, 0.7);
+      }
+      .slot.off:hover {
+        background: rgba(211, 47, 47, 0.85);
+      }
+      .slot.off.selected {
+        border: 3px solid rgba(211, 47, 47, 0.85);
+      }
+      .slot.off.selected:hover {
+        border: 3px solid rgba(211, 47, 47, 1);
+      }
       .slot.empty {
         background: rgba(var(--rgb-secondary-text-color), 0.5);
       }
@@ -397,6 +425,18 @@ export class SchedulerTimeslotEditor extends LitElement {
       }
       .slot .marker:hover {
         background: rgba(var(--rgb-primary-color), 1);
+      }
+      .slot.on .marker {
+        background: rgba(var(--rgb-state-active-color, 67, 160, 71), 0.9);
+      }
+      .slot.on .marker:hover {
+        background: rgba(var(--rgb-state-active-color, 67, 160, 71), 1);
+      }
+      .slot.off .marker {
+        background: rgba(211, 47, 47, 0.85);
+      }
+      .slot.off .marker:hover {
+        background: rgba(211, 47, 47, 1);
       }
       .slot.empty .marker {
         background: rgba(var(--rgb-secondary-text-color), 0.85);
