@@ -1,13 +1,22 @@
-import { css, html, LitElement, TemplateResult } from "lit";
-import { customElement, property } from "lit/decorators";
+import { css, html, LitElement, nothing, TemplateResult } from "lit";
+import { customElement, property, state } from "lit/decorators";
 import { BooleanSelector, NumberSelector, SelectOption, Selector, SelectSelector, StringSelector } from "../lib/selector";
 import { HomeAssistant } from "../lib/types";
 import { fireEvent } from "../lib/fire_event";
-import { PickerComboBoxItem, PickerValueRenderer } from "./scheduler-picker";
 import { hassLocalize } from "../localize/hassLocalize";
 import { roundFloat } from "../lib/round_float";
 import { isDefined } from "../lib/is_defined";
 
+import './scheduler-chip-set';
+
+interface PickerComboBoxItem {
+  id: string;
+  primary: string;
+  secondary?: string;
+  icon?: string;
+}
+
+const NONE = "__NONE_OPTION__";
 
 @customElement("scheduler-combo-selector")
 export class SchedulerComboSelector extends LitElement {
@@ -16,7 +25,7 @@ export class SchedulerComboSelector extends LitElement {
   @property({ attribute: false }) config!: Selector;
 
   @property() public value?: string | number | string[];
-  @property() public disabled: boolean = false;
+  @property({ type: Boolean }) public disabled: boolean = false;
 
   protected render(): TemplateResult {
     if ((this.config as SelectSelector).select) {
@@ -52,100 +61,105 @@ export class SchedulerComboSelector extends LitElement {
         if (!label) label = value;
         return label;
       }
-      const filteredItems = (): PickerComboBoxItem[] => {
-
-        const comboBoxOption = (option: string | SelectOption): PickerComboBoxItem => {
-          if (typeof option === 'object') {
-            return {
-              id: option.value,
-              primary: computeItemLabel(option.label),
-              icon: option.icon
-            }
-          }
-          else {
-            return {
-              id: option,
-              primary: computeItemLabel(option)
-            }
+      const comboBoxOption = (option: string | SelectOption): PickerComboBoxItem => {
+        if (typeof option === 'object') {
+          return {
+            id: option.value,
+            primary: computeItemLabel(option.label),
+            icon: option.icon
           }
         }
-        let options = [...config?.options].map(comboBoxOption);
-
-        let selectedValue = [this.value || []].flat().map(String);
-        options = [...options, ...selectedValue.filter(e => !options.find(f => f.id == e)).map(comboBoxOption)];
-
-        if (Array.isArray(this.value)) options = options.filter(e => typeof e === 'object' ? !values.includes(e.id) : !values.includes(e));
-        return options;
-      }
-
-      const valueRenderer: PickerValueRenderer = (value: string) => {
-        let label = value;
-        let icon = '';
-        let match = config.options.find(e => typeof e === 'object' ? e.value === value : e === value);
-        if (match && typeof match === 'object') {
-          label = computeItemLabel(match.label);
-          icon = match.icon || icon;
-        }
-        else label = computeItemLabel(value);
-
-        if (icon) {
-          return html`
-            <ha-icon
-              slot="start"
-              .icon=${icon}
-              style="margin: 0 4px"
-            >
-            </ha-icon>
-            <span slot="headline">${label}</span>
-          `;
-        }
         else {
-          return html`
-            <span slot="headline">${label}</span>
-          `;
-        }
-      };
-
-      const rowRenderer = (item: PickerComboBoxItem) => {
-        if (item.icon) {
-          return html`
-            <ha-combo-box-item type="button" compact>
-              <ha-icon
-                slot="start"
-                .icon=${item.icon}
-              >
-              </ha-icon>
-              <span slot="headline">${item.primary}</span>
-            </ha-combo-box-item>
-          `;
-        }
-        else {
-          return html`
-            <ha-combo-box-item type="button" compact>
-              <span slot="headline">${item.primary}</span>
-            </ha-combo-box-item>
-          `;
+          return {
+            id: option,
+            primary: computeItemLabel(option)
+          }
         }
       }
+      let options = [...config?.options].map(comboBoxOption);
+      let selectedValue = [this.value || []].flat().map(String);
+      options = [...options, ...selectedValue.filter(e => !options.find(f => f.id == e)).map(comboBoxOption)];
+      if (Array.isArray(this.value)) options = options.filter(e => typeof e === 'object' ? !values.includes(e.id) : !values.includes(e));
+
+      const renderOptions = () => {
+        if (!options.length) return html`
+          <ha-dropdown-item .value=${NONE}>
+            ${this.hass.localize("ui.components.combo-box.no_match")}
+          </ha-dropdown-item>
+        `;
+
+        const useIcons = options.some(e => e.icon);
+        return options.map(option => html`
+          <ha-dropdown-item
+            .value=${option.id}
+          >
+            ${option.icon ? html`<ha-icon slot="icon" .icon=${option.icon}></ha-icon>` : nothing}
+            <span>${option.primary}</span>
+          </ha-dropdown-item>
+        `);
+      }
+
+      const _handleShow = (ev: Event) => {
+        let dropdown = ev.target as HTMLElement;
+        let picker = dropdown.querySelector('ha-picker-field') as HTMLElement;
+        this.style.setProperty("--select-menu-width", `${picker.offsetWidth}px`);
+        dropdown.classList.add("opened");
+      }
+
+      const _handleHide = (ev: Event) => {
+        let dropdown = ev.target as HTMLElement;
+        dropdown.classList.remove("opened");
+      }
+
+      const _handleSelect = (ev: CustomEvent) => {
+        const value = ev.detail.item.value;
+        if (value == NONE || Array.isArray(this.value)) {
+          (ev.target as any).value = undefined;
+          if (value == NONE) return;
+        }
+        this._valueChanged(new CustomEvent('value-changed', { detail: { value: value } }));
+      }
+
+      const _clearValue = () => {
+        this._valueChanged(new CustomEvent('value-changed', { detail: { value: undefined } }));
+      }
+
+      const selectedOption = isDefined(this.value) && !Array.isArray(this.value)
+        ? options.find(e => e.id === this.value)
+        : undefined;
+
+      const value = selectedOption
+        ? selectedOption.primary || selectedOption.id
+        : isDefined(this.value) && !Array.isArray(this.value)
+          ? this.value
+          : undefined;
 
       return html`
-          <div class="select-wrapper">
-        ${config.multiple ? html`
+        <div class="select-wrapper">
+          ${config.multiple ? html`
           <div class="chips">
           ${renderChips()}
           </div>
-        ` : ''}
-        <scheduler-picker
-          .hass=${this.hass}
-          ?allow-custom-value=${config.custom_value}
-          .getItems=${filteredItems}
-          .rowRenderer=${rowRenderer}
-          .valueRenderer=${valueRenderer}
-          @value-changed=${this._valueChanged}
-          .value=${!Array.isArray(this.value) ? this.value || "" : ""}
-          ?disabled=${this.disabled}
-        >
-        </scheduler-picker>
+          ` : ''}
+          <ha-dropdown
+            placement="bottom"
+            @wa-select=${_handleSelect}
+            @wa-show=${_handleShow}
+            @wa-hide=${_handleHide}
+          >
+            <ha-picker-field
+              slot="trigger"
+              type="button"
+              compact
+              @clear=${_clearValue}
+              .disabled=${this.disabled}
+              .hideClearIcon=${this.disabled || !isDefined(this.value) || (Array.isArray(this.value) && !this.value.length)}
+              .value=${value}
+              .icon=${selectedOption?.icon}
+            >
+            </ha-picker-field>
+            ${renderOptions()}
+          </ha-dropdown>
         </div>
       `;
     }
@@ -196,7 +210,7 @@ export class SchedulerComboSelector extends LitElement {
         <div class="slider-wrapper">
         ${boxMode
           ? html`
-        <ha-textfield
+        <ha-input
           .inputMode=${config.step && Number(config.step) % 1 == 0 ? "numeric" : "decimal"}
           .min=${config.min}
           .max=${config.max}
@@ -210,7 +224,7 @@ export class SchedulerComboSelector extends LitElement {
           .validityTransform=${validateBoxInput}
           @input=${boxValueChanged}
         >
-        </ha-textfield>
+        </ha-input>
         `
           : html`
         <ha-slider
@@ -230,12 +244,12 @@ export class SchedulerComboSelector extends LitElement {
       const config = (this.config as StringSelector).text!;
       return html`
         <div class="textfield-wrapper">
-          <ha-textfield
+          <ha-input
             .value=${this.value || ""}
             @input=${this._valueChanged}
             .placeholder=""
             ?disabled=${this.disabled}
-          ></ha-textfield> 
+          ></ha-input> 
         </div>     
       `
     }
@@ -301,8 +315,8 @@ export class SchedulerComboSelector extends LitElement {
         min-width: 45px;
         text-align: end;
       }
-      div.slider-wrapper ha-textfield {
-        --ha-textfield-input-width: 40px;
+      div.slider-wrapper ha-input {
+        --ha-input-input-width: 100px;
       }
       div.select-wrapper {
         display: flex;
@@ -313,9 +327,12 @@ export class SchedulerComboSelector extends LitElement {
         display: flex;
         width: 100%;
       }
-      div.textfield-wrapper ha-textfield {
+      div.textfield-wrapper ha-input {
         display: flex;
         width: 100%;
+      }
+      ha-dropdown::part(menu) {
+        min-width: var(--select-menu-width);
       }
   `;
 
@@ -326,7 +343,6 @@ export class SchedulerComboSelector extends LitElement {
       let value = (ev as CustomEvent).detail.value;
       if (!value) return;
       this.value = [...this.value, value];
-      (ev.target as any).value = "";
     }
     else if ((ev as CustomEvent).detail) {
       let value = (ev as CustomEvent).detail.value;

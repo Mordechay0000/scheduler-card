@@ -1,6 +1,8 @@
 {
   "services": {
     "generic": {
+      "turn_on": "Laita päälle",
+      "turn_off": "Sammuta",
       "parameter_to_value": "{parameter} {value}",
       "action_with_parameter": "{action} {parameter}"
     },
@@ -23,7 +25,7 @@
       "set_cover_tilt_position": "aseta kallistus[ {tilt_position}]"
     },
     "fan": {
-      "set_speed": "aseta nopeus[ {speed}]",
+      "set_percentage": "aseta nopeus[ {speed}]",
       "set_direction": "asenta suunta[ {direction}]",
       "oscillate": "aseta pyörimisnopeus[ {oscillate}]"
     },
@@ -111,7 +113,8 @@
         "no_results": "No matching items found"
       },
       "action_picker": {
-        "title": "Choose action"
+        "title": "Choose action",
+        "show_all": "Show all supported entities"
       }
     },
     "panel": {
@@ -229,6 +232,10 @@
           "show_header_toggle": {
             "heading": "Näytä otsikkokytkin",
             "description": "Näytä kytkin kortin yläreunassa usean ajastuksen päälle/pois kytkemiseen"
+          },
+          "show_toggle_switches": {
+            "heading": "Näytä kytkimet",
+            "description": "Näytä kytkin jokaiselle yksittäiselle ajastukselle kortissa"
           },
           "tags": {
             "heading": "Tunniste",

@@ -22,6 +22,7 @@ import { isDefined } from "../lib/is_defined";
 import './scheduler-main-panel';
 import './scheduler-options-panel';
 import './generic-dialog';
+import { defaultSingleTimerConfig, defaultTimeSchemeConfig } from "../const";
 
 export type SchedulerDialogParams = {
   schedule: Schedule,
@@ -89,13 +90,18 @@ export class DialogSchedulerEditor extends LitElement {
   render() {
     if (!this._params) return html``;
     return html`
-      <ha-dialog open @closed=${this.closeDialog} .heading=${true} hideActions scrimClickAction="">
-        <ha-dialog-header slot="heading">
+      <ha-dialog
+        open
+        @closed=${this.closeDialog}
+        width="${this.large ? 'full' : 'medium'}"
+        prevent-scrim-close
+      >
+        <ha-dialog-header slot="header">
           ${this._panel == "main"
         ? html`
           <ha-icon-button
             slot="navigationIcon"
-            dialogAction="cancel"
+            data-dialog="close"
             .label=${hassLocalize('ui.dialogs.more_info_control.dismiss', this.hass)}
             .path=${mdiClose}
           ></ha-icon-button>
@@ -115,15 +121,14 @@ export class DialogSchedulerEditor extends LitElement {
           ></ha-icon-button>
           `
       }
-          <span slot="title" @click=${() => this.large = !this.large}>
+          <div slot="title" @click=${() => this.large = !this.large}>
             ${this._params.editItem
         ? this.schedule.name
           ? this.schedule?.name
           : localize('ui.panel.common.default_name', this.hass, '{id}', this._params.editItem)
         : localize('ui.panel.common.new_schedule', this.hass)
       }
-          </span>
-
+          </div>
         </ha-dialog-header>
 
         <div class="content">
@@ -154,15 +159,14 @@ export class DialogSchedulerEditor extends LitElement {
       }
         </div>
 
-
-        <div class="buttons">
-          <ha-button appearance="plain" @click=${this._handleDeleteClick} variant="danger" ?disabled=${!this.schedule.entity_id}>
-            ${hassLocalize('ui.common.delete', this.hass)}
-          </ha-button>
-          <ha-button appearance="plain" @click=${this._handleSaveClick}>
-            ${hassLocalize('ui.common.save', this.hass)}
-          </ha-button>
-        </div>
+          <div class="buttons" slot="footer">
+            <ha-button appearance="plain" @click=${this._handleDeleteClick} variant="danger" ?disabled=${!this.schedule.entity_id}>
+              ${hassLocalize('ui.common.delete', this.hass)}
+            </ha-button>
+            <ha-button appearance="plain" @click=${this._handleSaveClick}>
+              ${hassLocalize('ui.common.save', this.hass)}
+            </ha-button>
+          </div>
       </ha-dialog>
     `;
   }
@@ -276,18 +280,48 @@ export class DialogSchedulerEditor extends LitElement {
 
     if (viewMode == EditorMode.Scheme) {
       this.viewMode = viewMode;
+      const isDefaultSchedule = deepCompare([...this.schedule.entries], [...defaultSingleTimerConfig.entries]);
+      if (isDefaultSchedule) {
+        this.schedule = { ...this.schedule, entries: [...defaultTimeSchemeConfig.entries] };
+      } else {
+        // Convert any checkpoint slots (stop === undefined, used by single-timer mode) to
+        // duration slots so they display correctly in the scheme editor, which no longer
+        // has a checkbox to toggle checkpoint mode.
+        const hasCheckpoints = this.schedule.entries.some(e => e.slots.some(s => s.stop === undefined));
+        if (hasCheckpoints) {
+          this.schedule = {
+            ...this.schedule,
+            entries: this.schedule.entries.map(entry => ({
+              ...entry,
+              slots: entry.slots.map((slot, idx, arr) => {
+                if (slot.stop !== undefined) return slot;
+                // Use next slot's start as stop; fall back to '00:00:00' which,
+                // when used as a stop time, is treated as the end of the 24-hour day.
+                const nextSlot = arr[idx + 1];
+                return { ...slot, stop: nextSlot ? nextSlot.start : '00:00:00' };
+              })
+            }))
+          };
+        }
+      }
       return;
     }
     else if (viewMode == EditorMode.Single && !multipleActionsDefined) {
-      let schedule = {
-        ...this.schedule,
-        entries: this.schedule.entries.map(e => {
-          let idx = e.slots.findIndex(e => e.actions.length)
-          if (idx < 0) idx = Math.floor(e.slots.length / 2);
-          return <ScheduleEntry>{ ...e, slots: e.slots.map((e, i) => i == idx ? { ...e, stop: undefined } : null).filter(isDefined) };
-        })
+      const isDefaultSchedule = deepCompare([...this.schedule.entries], [...defaultTimeSchemeConfig.entries]);
+      if (isDefaultSchedule) {
+        this.schedule = { ...this.schedule, entries: [...defaultSingleTimerConfig.entries] };
       }
-      this.schedule = parseTimeBar(schedule, this.hass);
+      else {
+        let schedule = {
+          ...this.schedule,
+          entries: this.schedule.entries.map(e => {
+            let idx = e.slots.findIndex(e => e.actions.length)
+            if (idx < 0) idx = Math.floor(e.slots.length / 2);
+            return <ScheduleEntry>{ ...e, slots: e.slots.map((e, i) => i == idx ? { ...e, stop: undefined } : null).filter(isDefined) };
+          })
+        }
+        this.schedule = parseTimeBar(schedule, this.hass);
+      }
       this.viewMode = viewMode;
       return;
     }

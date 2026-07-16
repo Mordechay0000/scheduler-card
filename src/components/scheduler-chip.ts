@@ -113,7 +113,7 @@ export class SchedulerChip extends LitElement {
       });
       this.dispatchEvent(myEvent);
     }
-    else {
+    else if (this.selectable) {
       const myEvent = new CustomEvent('click', {
         detail: {
           value: this.value,
@@ -146,7 +146,7 @@ export class SchedulerChip extends LitElement {
         height: var(--chip-height, 32px);
         background: none;
         user-select: none;
-        z-index: 1;
+        z-index: 0;
         align-items: center;
         justify-content: center;
       }

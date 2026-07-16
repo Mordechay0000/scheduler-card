@@ -1,6 +1,8 @@
 {
   "services": {
     "generic": {
+      "turn_on": "Włącz",
+      "turn_off": "Wyłącz",
       "parameter_to_value": "{parameter} na {value}",
       "action_with_parameter": "{action} z parametrem {parameter}"
     },
@@ -111,7 +113,8 @@
         "no_results": "Nie znaleziono pasujących elementów"
       },
       "action_picker": {
-        "title": "Wybierz akcję"
+        "title": "Wybierz akcję",
+        "show_all": "Pokaż wszystkie obsługiwane jednostki"
       }
     },
     "panel": {
@@ -229,6 +232,10 @@
           "show_header_toggle": {
             "heading": "Pokaż przełącznik w nagłówku",
             "description": "Pokaż przełącznik w nagłówku karty do włączania/wyłączania wszystkich encji"
+          },
+          "show_toggle_switches": {
+            "heading": "Pokaż przełączniki",
+            "description": "Pokaż przełącznik dla każdego harmonogramu w karcie"
           },
           "tags": {
             "heading": "Tagi",

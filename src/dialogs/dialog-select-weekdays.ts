@@ -25,14 +25,14 @@ export class DialogSelectWeekdays extends LitElement {
 
   @state() weekdayTypeCustomSelected: boolean = false;
 
-  selectedWeekdays: TWeekday[] = [];
+  @state() selectedWeekdays: TWeekday[] = [];
 
   public async showDialog(params: DialogSelectWeekdayParams): Promise<void> {
     this._params = params;
     await this.updateComplete;
 
     this.selectedWeekdays = this._params.weekdays.filter(e => ![TWeekday.Daily, TWeekday.Weekend, TWeekday.Workday].includes(e));
-    this.weekdayTypeCustomSelected = this.selectedWeekdays.length > 0;
+    this.weekdayTypeCustomSelected = this.selectedWeekdays.length > 0 && this._params.weekdays.length == this.selectedWeekdays.length;
   }
 
   public async closeDialog() {
@@ -43,8 +43,12 @@ export class DialogSelectWeekdays extends LitElement {
   render() {
     if (!this._params) return html``;
     return html`
-      <ha-dialog open .heading=${true} @closed=${this.closeDialog} @close-dialog=${this.closeDialog}>
-        <ha-dialog-header slot="heading">
+      <ha-dialog
+        open
+        @closed=${this.closeDialog}
+        width="small"
+      >
+        <ha-dialog-header slot="header">
           ${this.weekdayTypeCustomSelected
         ? html`
           <ha-icon-button
@@ -57,33 +61,40 @@ export class DialogSelectWeekdays extends LitElement {
         : html`
           <ha-icon-button
             slot="navigationIcon"
-            dialogAction="cancel"
+            data-dialog="close"
             .label=${hassLocalize('ui.dialogs.more_info_control.dismiss', this.hass)}
             .path=${mdiClose}
           ></ha-icon-button>
           `};
-          <span slot="title">
+          <div slot="title">
               ${localize('ui.dialog.weekday_picker.title', this.hass)}
-          </span>
+          </div>
         </ha-dialog-header>
         <div class="wrapper">
-          <mwc-list>
+          <ha-list>
           ${this._renderWeekdayOptions()}
-          </mwc-list>
+          </ha-list>
         </div>
 
-        <ha-button appearance="plain" slot="primaryAction" @click=${this.cancelClick} dialogAction="close">
-          ${hassLocalize('ui.common.cancel', this.hass)}
-        </ha-button>
-        <ha-button
-          appearance="accent"
-          slot="primaryAction"
-          @click=${this.confirmClick}
-          dialogAction="close"
-          ?disabled=${!this._params.weekdays.length}
-        >
-          ${hassLocalize('ui.common.ok', this.hass)}
-        </ha-button>
+        <ha-dialog-footer slot="footer">
+          <ha-button
+            appearance="plain"
+            slot="secondaryAction"
+            @click=${this.cancelClick}
+            data-dialog="close"
+          >
+            ${hassLocalize('ui.common.cancel', this.hass)}
+          </ha-button>
+          <ha-button
+            appearance="accent"
+            slot="primaryAction"
+            @click=${this.confirmClick}
+            data-dialog="close"
+            ?disabled=${!this._params.weekdays.length}
+          >
+            ${hassLocalize('ui.common.ok', this.hass)}
+          </ha-button>
+        </ha-dialog-footer>
       </ha-dialog>
     `;
   }
@@ -117,13 +128,13 @@ export class DialogSelectWeekdays extends LitElement {
     }
 
     const isSelectedOption = (item: string) => {
-      if (item == WeekdayTypeCustom) return this._params?.weekdays.every(e => ![TWeekday.Daily, TWeekday.Weekend, TWeekday.Workday].includes(e));
+      if (item == WeekdayTypeCustom) return this._params?.weekdays.some(e => ![TWeekday.Daily, TWeekday.Weekend, TWeekday.Workday].includes(e));
       return this._params?.weekdays.includes(item as TWeekday);
     }
 
     return listOptions.map((key) => {
       return html`
-        <mwc-list-item
+        <ha-list-item
           graphic="icon"
           @click=${this._toggleSelectOption}
           option="${key}"
@@ -135,9 +146,8 @@ export class DialogSelectWeekdays extends LitElement {
         }
           ${key == WeekdayTypeCustom
           ? html`
-          
             ${capitalizeFirstLetter(localize('ui.dialog.weekday_picker.choose', this.hass))}
-            ${isSelectedOption(key) ? html`<span class="badge">${this.selectedWeekdays.length}</span>` : ''}
+            ${this.selectedWeekdays.length ? html`<span class="badge">${this.selectedWeekdays.length}</span>` : ''}
             `
           : capitalizeFirstLetter(computeDayDisplay(key as TWeekday, 'long', this.hass))
         }
@@ -146,7 +156,7 @@ export class DialogSelectWeekdays extends LitElement {
           ? html`<ha-icon slot="meta" icon="mdi:chevron-right"></ha-icon>`
           : ''
         }
-        </mwc-list-item>
+        </ha-list-item>
     `})
   }
 
@@ -158,7 +168,8 @@ export class DialogSelectWeekdays extends LitElement {
       this.weekdayTypeCustomSelected = true;
     }
     else if ([TWeekday.Daily, TWeekday.Weekend, TWeekday.Workday].includes(option)) {
-      weekdays = [option];
+      if (!weekdays.includes(option)) weekdays = [option];
+      else if (weekdays.length > 1) weekdays = weekdays.filter(e => e != option);
       this.weekdayTypeCustomSelected = false;
     }
     else if (weekdays.includes(option)) {
@@ -168,11 +179,13 @@ export class DialogSelectWeekdays extends LitElement {
       weekdays = [...weekdays, option];
     }
     this._params = Object.assign(this._params!, { weekdays: weekdays });
+    (ev.target as HTMLInputElement).blur();
     this.requestUpdate();
   }
 
   confirmClick() {
-    this._params!.confirm(this._params!.weekdays);
+    const input = Array.from(new Set(this._params!.weekdays));
+    this._params!.confirm(input);
   }
 
   cancelClick() {
@@ -186,28 +199,17 @@ export class DialogSelectWeekdays extends LitElement {
 
   static get styles(): CSSResultGroup {
     return css`
-      ha-dialog {
-        --dialog-content-padding: 0;
-        --mdc-dialog-max-height: 60vh;
-      }
-      @media all and (min-width: 350px) {
-        ha-dialog {
-          --mdc-dialog-min-width: 300px;
-        }
-      }
       div.wrapper {
         color: var(--primary-text-color);
         padding: 0px 12px;
       }
-      mwc-list {
+      ha-list {
         --mdc-list-vertical-padding: 0px;
       }
-
-      mwc-list-item[disabled] {
+      ha-list-item[disabled] {
         color: var(--disabled-text-color);
       }
-
-      mwc-list-item.nested {
+      ha-list-item.nested {
         --mdc-list-side-padding: 36px;
       }
       .badge {

@@ -1,6 +1,6 @@
 import { LitElement, html, css, CSSResultGroup } from 'lit';
 import { property, customElement, state } from 'lit/decorators.js';
-import { mdiClose } from '@mdi/js';
+import { mdiClose, mdiDotsVertical } from '@mdi/js';
 import { sortByName } from '../lib/sort';
 import { computeConditionDomains } from '../data/compute_condition_domains';
 import { localize } from '../localize/localize';
@@ -8,6 +8,7 @@ import { HomeAssistant } from '../lib/types';
 import { styleMap } from 'lit/directives/style-map';
 import { CardConfig } from '../types';
 import { hassLocalize } from '../localize/hassLocalize';
+import { isDefined } from '../lib/is_defined';
 
 export type DialogSelectConditionParams = {
   cancel: () => void;
@@ -28,9 +29,11 @@ export class DialogSelectCondition extends LitElement {
 
   @state() private _width?: number;
   @state() private _height?: number;
+  @state() showAll = false;
 
   public async showDialog(params: DialogSelectConditionParams): Promise<void> {
     this._params = params;
+    this.showAll = false;
     await this.updateComplete;
   }
 
@@ -44,7 +47,6 @@ export class DialogSelectCondition extends LitElement {
 
   async willUpdate() {
     (this.hass as any).loadBackendTranslation("title");
-
   }
 
   render() {
@@ -52,26 +54,40 @@ export class DialogSelectCondition extends LitElement {
     return html`
       <ha-dialog
         open
-        .heading=${true}
-        @opened=${this._opened}
         @closed=${this.closeDialog}
-        @close-dialog=${this.closeDialog}
-        hideActions
+        @wa-after-show=${this._opened}
       >
-        <div slot="heading">
+        <div slot="header">
           <ha-dialog-header>
             <ha-icon-button
               slot="navigationIcon"
-              dialogAction="cancel"
+              data-dialog="close"
               .label=${hassLocalize('ui.dialogs.more_info_control.dismiss', this.hass)}
               .path=${mdiClose}
             ></ha-icon-button>
-            <span slot="title">
+            <div slot="title">
               ${localize('ui.panel.options.conditions.add_condition', this.hass)}
-            </span>
+            </div>
+            ${!isDefined(this._params.domain) ? html`
+            <ha-dropdown
+              placement="bottom-end"
+              slot="actionItems"
+              @wa-after-hide=${(ev: Event) => { ((ev.target as HTMLElement).firstElementChild as HTMLElement).blur() }}
+            >
+              <ha-icon-button slot="trigger" .label=${this.hass.localize('ui.common.menu')} .path=${mdiDotsVertical}>
+              </ha-icon-button>
+              <ha-dropdown-item @click=${this._toggleShowAll}>
+                <ha-icon
+                  icon="mdi:check"
+                  style="${this.showAll ? '' : 'visibility: hidden'}"
+                ></ha-icon>
+                ${localize('ui.dialog.action_picker.show_all', this.hass)}
+              </ha-dropdown-item>
+            </ha-dropdown>`
+        : ''}
           </ha-dialog-header>
 
-          <ha-textfield
+          <ha-input
             dialogInitialFocus
             .placeholder=${hassLocalize("ui.common.search", this.hass)}
             aria-label=${hassLocalize("ui.common.search", this.hass)}
@@ -92,17 +108,17 @@ export class DialogSelectCondition extends LitElement {
               `}
               <slot name="suffix"></slot>
             </div>
-          </ha-textfield>
+          </ha-input>
         </div>
 
-        <mwc-list
+        <ha-list
           style=${styleMap({
-        width: this._width ? `${this._width}px` : "auto",
+        minWidth: `${this._width}px`,
         height: this._height ? `${Math.min(468, this._height)}px` : "auto",
       })}
         >
           ${this._renderOptions()}
-        </mwc-list>
+        </ha-list>
       </ha-dialog>
     `;
   }
@@ -110,7 +126,7 @@ export class DialogSelectCondition extends LitElement {
   protected _opened(): void {
     // Store the width and height so that when we search, box doesn't jump
     const boundingRect =
-      this.shadowRoot!.querySelector("mwc-list")?.getBoundingClientRect();
+      this.shadowRoot!.querySelector("ha-list")?.getBoundingClientRect();
     this._width = boundingRect?.width;
     this._height = boundingRect?.height;
   }
@@ -131,7 +147,10 @@ export class DialogSelectCondition extends LitElement {
 
   _renderOptions() {
     //if (!this._params?.domain) {
-    let domains = computeConditionDomains(this.hass, this._params!.cardConfig!);
+
+    let cardConfig = { ...this._params?.cardConfig };
+    if (this.showAll) cardConfig = { ...cardConfig, include: undefined, exclude: undefined };
+    let domains = computeConditionDomains(this.hass, cardConfig);
 
     domains.sort((a, b) => sortByName(a.name, b.name));
 
@@ -146,13 +165,13 @@ export class DialogSelectCondition extends LitElement {
     }
 
     return (Object.keys(domains)).map((key) => html`
-        <mwc-list-item
+        <ha-list-item
           graphic="icon"
           @click=${() => this._handleDomainClick(domains[key].key)}
         >
           <ha-icon slot="graphic" icon="${domains[key].icon}"></ha-icon>
           <span>${domains[key].name}</span>
-        </mwc-list-item>
+        </ha-list-item>
     `);
   }
 
@@ -164,20 +183,30 @@ export class DialogSelectCondition extends LitElement {
     this._clearSearch();
   }
 
+
+  _toggleShowAll() {
+    if (this.showAll) {
+      this.showAll = false;
+    } else {
+      this.showAll = true;
+    }
+  }
+
   static get styles(): CSSResultGroup {
     return css`
       ha-dialog {
         --dialog-content-padding: 0;
-        --mdc-dialog-max-height: 60vh;
+        --ha-dialog-width-md: 480px;
       }
-      @media all and (min-width: 550px) {
-        ha-dialog {
-          --mdc-dialog-min-width: 500px;
-        }
-      }
-      ha-textfield {
+      ha-input {
         display: block;
         margin: 0 16px;
+      }
+      ha-list {
+        min-height: 300px;
+      }
+      ha-list-item:not([twoline]) {
+        height: 56px;
       }
     `;
   }

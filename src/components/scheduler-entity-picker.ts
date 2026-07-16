@@ -4,15 +4,27 @@ import { computeDomain, friendlyName } from "../lib/entity";
 import { matchPattern } from "../lib/patterns";
 import { HomeAssistant } from "../lib/types";
 import { fireEvent } from "../lib/fire_event";
-import { PickerComboBoxItem, PickerValueRenderer } from "./scheduler-picker";
 import { mdiChevronDown, mdiChevronUp, mdiShape } from "@mdi/js";
 import { fetchItems } from "../data/store/fetch_items";
 import { CustomConfig } from "../types";
 import { DEFAULT_INCLUDED_DOMAINS } from "../const";
 import { HassEntity } from "home-assistant-js-websocket";
+import { hassLocalize } from "../localize/hassLocalize";
+import { entityIncludedByConfig } from "../data/actions/entity_included_by_config";
 
 import './scheduler-chip-set';
-import './scheduler-picker';
+
+interface PickerComboBoxItem {
+  id: string;
+  primary: string;
+  secondary?: string;
+  icon?: string;
+}
+
+const SEARCH_KEYS = [
+  { name: "primary", weight: 10 },
+  { name: "secondary", weight: 8 }
+];
 
 @customElement("scheduler-entity-picker")
 export class SchedulerEntityPicker extends LitElement {
@@ -40,6 +52,13 @@ export class SchedulerEntityPicker extends LitElement {
     this.scheduleEntities = Object.entries(await fetchItems(this.hass!)).map(
       ([, val]) => val.entity_id
     );
+    if (this.domain && this.config && !entityIncludedByConfig(this.domain, this.config)) {
+      this.config = {
+        ...this.config,
+        include: [...(this.config.include || []), this.domain],
+        exclude: [...(this.config.exclude || []).filter(e => !e.startsWith(this.domain!))]
+      };
+    }
     this._autoSelectIfSingleEntity();
   }
 
@@ -62,7 +81,7 @@ export class SchedulerEntityPicker extends LitElement {
     }
   }
 
-  private _valueRenderer: PickerValueRenderer = (value: string | string[]) => {
+  private _valueRenderer = (value: string | string[]) => {
     if (Array.isArray(value)) value = value.length ? [...value].pop()! : "";
     const entityId = value || "";
 
@@ -106,17 +125,24 @@ export class SchedulerEntityPicker extends LitElement {
 
       ${!this.value?.length || this.multipleMode || !this.multiple ?
         html`
-      <scheduler-picker
+
+      <ha-generic-picker
+        .label=${this.value?.length ? "" : hassLocalize("ui.components.entity.entity-picker.choose_entity", this.hass)}
         .hass=${this.hass}
-        allow-custom-value
-        .getItems=${this._filteredItems}
-        .rowRenderer=${this.rowRenderer}
-        .valueRenderer=${this._valueRenderer}
-        @value-changed=${this._valueChanged}
-        ?disabled=${this.disabled}
+        .autofocus=${this.autofocus}
+        .notFoundLabel=${hassLocalize("ui.components.combo-box.no_match", this.hass)}
         .value=${this.multiple ? "" : this.value}
+        .valueRenderer=${this._valueRenderer}
+        .rowRenderer=${this._rowRenderer}
+        .disabled=${this.disabled}
+        .getItems=${this._filteredItems}
+        .searchKeys=${SEARCH_KEYS}
+        .searchLabel=${hassLocalize("ui.dialogs.quick-bar.filter_placeholder", this.hass)}
+        @value-changed=${this._valueChanged}
+        hide-clear-icon
+        allow-custom-value
       >
-      </scheduler-picker>
+      </ha-generic-picker>
       ` : nothing}
     `;
   }
@@ -157,7 +183,7 @@ export class SchedulerEntityPicker extends LitElement {
       `;
   }
 
-  rowRenderer = (item: PickerComboBoxItem) => {
+  _rowRenderer = (item: PickerComboBoxItem) => {
     const entityId = item.id || "";
     const stateObj = this.hass.states[entityId];
 

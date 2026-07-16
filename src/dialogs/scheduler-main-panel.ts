@@ -12,14 +12,11 @@ import { DialogSelectActionParams } from "./dialog-select-action";
 import { DialogSelectWeekdayParams } from "./dialog-select-weekdays";
 
 import { computeDomain } from "../lib/entity";
-import { timeToString } from "../data/time/time_to_string";
-import { parseTimeString } from "../data/time/parse_time_string";
-import { addTimeOffset } from "../data/time/add_time_offset";
+import { computeTimestamp } from "../data/time/compute_timestamp";
 import { HomeAssistant } from "../lib/types";
 import { localize } from "../localize/localize";
 import { insertTimeslot } from "../data/schedule/insert_timeslot";
 import { removeTimeslot } from "../data/schedule/remove_timeslot";
-import { computeTimestamp } from "../data/time/compute_timestamp";
 import { formatFieldDisplay } from "../data/format/format_field_display";
 import { formatActionDisplay } from "../data/format/format_action_display";
 import { computeActionIcon } from "../data/format/compute_action_icon";
@@ -31,6 +28,7 @@ import { isDefined } from "../lib/is_defined";
 import { moveTimeslot } from "../data/schedule/move_timeslot";
 import { computeEntityDisplay } from "../data/format/compute_entity_display";
 import { DEFAULT_TIME_STEP } from "../const";
+import { HassEntity } from "home-assistant-js-websocket";
 
 import "../components/scheduler-timeslot-editor";
 import "../components/scheduler-time-picker";
@@ -40,7 +38,6 @@ import '../dialogs/dialog-select-action';
 import '../components/scheduler-collapsible-section';
 import '../components/scheduler-settings-row';
 import '../components/scheduler-combo-selector';
-import { HassEntity } from "home-assistant-js-websocket";
 
 @customElement('scheduler-main-panel')
 export class SchedulerMainPanel extends LitElement {
@@ -161,6 +158,7 @@ export class SchedulerMainPanel extends LitElement {
       `;
     }
     const slot = this.schedule.entries[this.selectedEntry].slots[this.selectedSlot];
+    const isLastSlot = this.selectedSlot === this.schedule.entries[this.selectedEntry!].slots.length - 1;
     let endTime = slot.stop;
     if (!endTime && (this.selectedSlot < this.schedule.entries[this.selectedEntry].slots.length - 1))
       endTime = this.schedule.entries[this.selectedEntry].slots[this.selectedSlot + 1].start;
@@ -181,24 +179,15 @@ export class SchedulerMainPanel extends LitElement {
           </scheduler-time-picker>
         </div>
         <div class="column">
-
-          <div style="display: flex; flex-direction: row">
-          <mwc-checkbox
-            ?checked=${slot.stop !== undefined}
-            @change=${this._toggleStopTime}
-          >
-          </mwc-checkbox>
-
           <scheduler-time-picker
             .hass=${this.hass}
             label="${localize('ui.panel.editor.stop_time', this.hass)}:"
-            ?disabled=${slot.stop === undefined || this.selectedSlot == (this.schedule.entries[this.selectedEntry!].slots.length - 1)}
+            ?disabled=${isLastSlot}
             .time=${endTime}
             @value-changed=${this._stopTimeChanged}
             ?useAmPm=${useAmPm(this.hass.locale)}
           >
           </scheduler-time-picker>
-          </div>
         </div>
       </div>`
         : ''}
@@ -253,24 +242,23 @@ export class SchedulerMainPanel extends LitElement {
           <span>${capitalizeFirstLetter(heading)}</span>
         </div>
 
-        <ha-button-menu
+        <ha-dropdown
           slot="contextMenu" 
-          @action=${this._actionItemOptionsClick}
-          @closed=${(ev: Event) => { ev.stopPropagation() }}
-          @click=${(ev: Event) => { ev.preventDefault(); ev.stopImmediatePropagation() }}
-          fixed
+          @wa-select=${this._actionItemOptionsClick}
+          @wa-after-hide=${(ev: Event) => { ((ev.target as HTMLElement).firstElementChild as HTMLElement).blur() }}
+          placement="bottom-end"
         >
           <ha-icon-button slot="trigger" .path=${mdiDotsVertical}>
           </ha-icon-button>
-          <mwc-list-item graphic="icon">
+          <ha-dropdown-item value="change_type">
+            <ha-icon icon="mdi:pencil"></ha-icon>
             ${hassLocalize('ui.panel.lovelace.editor.card.conditional.change_type', this.hass)}
-            <ha-icon slot="graphic" icon="mdi:pencil"></ha-icon>
-          </mwc-list-item>
-          <mwc-list-item graphic="icon" class="warning">
+          </ha-dropdown-item>
+          <ha-dropdown-item variant="danger" value="delete">
+            <ha-icon icon="mdi:delete"></ha-icon>
             ${hassLocalize('ui.common.delete', this.hass)}
-            <ha-icon slot="graphic" icon="mdi:delete"></ha-icon>
-          </mwc-list-item>
-        </ha-button-menu>
+          </ha-dropdown-item>
+        </ha-dropdown>
 
         <div slot="content">
 
@@ -480,12 +468,12 @@ export class SchedulerMainPanel extends LitElement {
 
 
   _actionItemOptionsClick(ev: CustomEvent) {
-    const option = ev.detail.index;
+    const option: 'delete' | 'change_type' = ev.detail.item.value;
     switch (option) {
-      case 0:
+      case 'change_type':
         this._showActionDialog(ev);
         break;
-      case 1:
+      case 'delete':
         this._updateSlot({ actions: [] });
         break;
     }
@@ -503,41 +491,6 @@ export class SchedulerMainPanel extends LitElement {
     let [slots, slotIdxOut] = moveTimeslot([...this.schedule.entries[this.selectedEntry!].slots], Number(this.selectedSlot), { start: value }, this.hass);
     this._updateEntry({ slots: slots });
     if (slotIdxOut != this.selectedSlot) this._updateSelectedSlot(slotIdxOut);
-  }
-
-  _toggleStopTime(ev: Event) {
-    const checked = (ev.target as HTMLInputElement).checked;
-    const slotIdx = Number(this.selectedSlot);
-    let slots = [... this.schedule.entries[this.selectedEntry!].slots];
-    if (checked) {
-      let nextSlot = slotIdx + 1;
-      let stopTime = slots[nextSlot].start;
-      if (!slots[slotIdx + 1].actions.length) {
-        stopTime = slots[slotIdx + 1].stop!;
-        nextSlot = slotIdx + 2;
-      }
-      slots = [
-        ...slots.slice(0, slotIdx),
-        { ...slots[slotIdx], stop: stopTime },
-        ...slots.slice(nextSlot)
-      ];
-    } else {
-      const stopTime = addTimeOffset(parseTimeString(slots[slotIdx].start), { minutes: 1 });
-      if ((computeTimestamp(slots[slotIdx].stop!, this.hass) - computeTimestamp(stopTime, this.hass)) != 0) {
-        slots = [ //insert empty slot after current slot to fill gap
-          ...slots.slice(0, slotIdx + 1),
-          {
-            start: timeToString(stopTime),
-            stop: slots[slotIdx].stop,
-            actions: [],
-            conditions: slots[slotIdx].conditions
-          },
-          ...slots.slice(slotIdx + 1)
-        ];
-      }
-      Object.assign(slots, { [slotIdx]: <Timeslot>{ ...slots[slotIdx], stop: undefined } });
-    }
-    this._updateEntry({ slots: slots });
   }
 
   _addTimeslot(ev: Event) {
@@ -608,10 +561,7 @@ export class SchedulerMainPanel extends LitElement {
   scheduler-collapsible-section .header span {
     flex: 1;
   }
-  mwc-checkbox {
-    align-self: center;
-  }
-  mwc-list-item.warning, mwc-list-item.warning ha-icon {
+  ha-list-item.warning, ha-list-item.warning ha-icon {
     color: var(--error-color);
   }
     `;

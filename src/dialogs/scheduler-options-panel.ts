@@ -2,7 +2,7 @@ import { LitElement, html, css, CSSResultGroup, PropertyValues } from 'lit';
 import { property, customElement, state } from 'lit/decorators.js';
 import { CardConfig, Condition, Schedule, ScheduleEntry, TConditionLogicType, TConditionMatchType, TRepeatType, Timeslot } from '../types';
 import { DialogSelectConditionParams } from './dialog-select-condition';
-import { mdiCog, mdiDotsVertical, mdiPencil } from '@mdi/js';
+import { mdiCheck, mdiCog, mdiDotsVertical, mdiPencil } from '@mdi/js';
 import { computeStatesForEntity } from '../data/compute_states_for_entity';
 import { computeEntityIcon } from '../data/format/compute_entity_icon';
 import { computeEntityDisplay } from '../data/format/compute_entity_display';
@@ -49,6 +49,8 @@ export class SchedulerOptionsPanel extends LitElement {
   @property()
   tags: string[] = [];
 
+  @state() customTagValue: String = '';
+
   async firstUpdated() {
     (await (window as any).loadCardHelpers()).importMoreInfoControl('input_datetime');
 
@@ -57,11 +59,11 @@ export class SchedulerOptionsPanel extends LitElement {
 
     const tagEntries = await fetchTags(this.hass!);
     const storedTags = tagEntries.map(e => e.name);
-    const configTags = [...(this.config.tags || [])].flat();
-    this.tags = [
+    const configTags = [this.config.tags || []].flat();
+    this.tags = [...new Set([
       ...storedTags,
       ...configTags.filter(e => !storedTags.includes(e) && !['none', 'disabled', 'enabled'].includes(e)),
-    ];
+    ])];
   }
 
   shouldUpdate(changedProps: PropertyValues): boolean {
@@ -87,42 +89,44 @@ export class SchedulerOptionsPanel extends LitElement {
         <span>${localize('ui.panel.options.conditions.header', this.hass)}:</span>
         ${this.schedule.entries[0].slots[0].conditions.items.length
         ? html`
-        <ha-button-menu
-          @action=${this._conditionConfigOptionsClick}
-          @closed=${(ev: Event) => { ev.stopPropagation() }}
-          @click=${(ev: Event) => { ev.preventDefault(); ev.stopImmediatePropagation() }}
-          fixed
-          menuCorner="END"
-          corner="BOTTOM_END"
+        <ha-dropdown
+          @wa-select=${this._conditionConfigOptionsClick}
+          @wa-after-hide=${(ev: Event) => { ((ev.target as HTMLElement).firstElementChild as HTMLElement).blur() }}
+          placement="bottom-end"
         >
           <ha-icon-button
             slot="trigger"
             .path=${mdiCog}
           >
           </ha-icon-button>
-          <mwc-list-item graphic="icon" ?disabled=${this.schedule.entries[0].slots[0].conditions.items.length < 2}>
-            ${this.schedule.entries[0].slots[0].conditions.type == TConditionLogicType.Or
-            ? html`<ha-icon icon="mdi:check" slot="graphic"></ha-icon>`
-            : ''
-          }
+          <ha-dropdown-item
+            ?disabled=${this.schedule.entries[0].slots[0].conditions.items.length < 2}
+            value="or"
+          >
+            <ha-icon
+              icon="mdi:check"
+              style="${this.schedule.entries[0].slots[0].conditions.type == TConditionLogicType.Or ? '' : 'visibility: hidden'}"
+            ></ha-icon>
             ${localize('ui.panel.options.conditions.options.logic_or', this.hass)}
-          </mwc-list-item>
-          <mwc-list-item graphic="icon" ?disabled=${this.schedule.entries[0].slots[0].conditions.items.length < 2}>
-            ${this.schedule.entries[0].slots[0].conditions.type == TConditionLogicType.And
-            ? html`<ha-icon icon="mdi:check" slot="graphic"></ha-icon>`
-            : ''
-          }
+          </ha-dropdown-item>
+          <ha-dropdown-item
+            ?disabled=${this.schedule.entries[0].slots[0].conditions.items.length < 2}
+            value="and"
+          >
+            <ha-icon
+              icon="mdi:check"
+              style="${this.schedule.entries[0].slots[0].conditions.type == TConditionLogicType.And ? '' : 'visibility: hidden'}"
+            ></ha-icon>
             ${localize('ui.panel.options.conditions.options.logic_and', this.hass)}
-          </mwc-list-item>
-          <mwc-list-item graphic="icon">
-
-            ${this.schedule.entries[0].slots[0].conditions.track_changes
-            ? html`<ha-icon icon="mdi:check" slot="graphic"></ha-icon>`
-            : ''
-          }
+          </ha-dropdown-item>
+          <ha-dropdown-item value="track_changes">
+            <ha-icon 
+              icon="mdi:check" 
+              style="${this.schedule.entries[0].slots[0].conditions.track_changes ? '' : 'visibility: hidden'}"
+            ></ha-icon>
             ${localize('ui.panel.options.conditions.options.track_changes', this.hass)}
-          </mwc-list-item>
-        </ha-button-menu>
+          </ha-dropdown-item>
+        </ha-dropdown>
         `
         : ''}
         </div>
@@ -146,40 +150,50 @@ export class SchedulerOptionsPanel extends LitElement {
 
       <span class="header">${localize('ui.panel.options.period.header', this.hass)}:</span>
       <div class="period">
-        <ha-checkbox
-          ?checked=${typeof this.schedule.start_date === 'string'}
-          @change=${this.toggleEnableDateRange}
-        >
-        </ha-checkbox>
-        <span>${localize('ui.panel.options.period.start_date', this.hass)}</span>
-        <ha-date-input
-          .locale=${this.hass.locale}
-          value=${this.startDate}
-          .label=${hassLocalize('ui.components.date-range-picker.start_date', this.hass)}
-          @value-changed=${this._setStartDate}
-          ?disabled=${!this.schedule.start_date}
-        >
-        </ha-date-input>
-        <span>${localize('ui.panel.options.period.end_date', this.hass)}</span>
-        <ha-date-input
-          .locale=${this.hass.locale}
-          value=${this.endDate}
-          .label=${hassLocalize('ui.components.date-range-picker.end_date', this.hass)}
-          @value-changed=${this._setEndDate}
-          ?disabled=${!this.schedule.end_date}
-        >
-        </ha-date-input>
+        <div>
+          <ha-checkbox
+            ?checked=${typeof this.schedule.start_date === 'string'}
+            @change=${this.toggleEnableDateRange}
+          >
+          </ha-checkbox>
+        </div>
+        <div>
+          <span>${localize('ui.panel.options.period.start_date', this.hass)}</span>
+        </div>
+        <div class="input">
+          <ha-date-input
+            .locale=${this.hass.locale}
+            value=${this.startDate}
+            .label=${hassLocalize('ui.components.date-range-picker.start_date', this.hass)}
+            @value-changed=${this._setStartDate}
+            ?disabled=${!this.schedule.start_date}
+          >
+          </ha-date-input>
+        </div>
+        <div>
+          <span>${localize('ui.panel.options.period.end_date', this.hass)}</span>
+        </div>
+        <div class="input">
+          <ha-date-input
+            .locale=${this.hass.locale}
+            value=${this.endDate}
+            .label=${hassLocalize('ui.components.date-range-picker.end_date', this.hass)}
+            @value-changed=${this._setEndDate}
+            ?disabled=${!this.schedule.end_date}
+          >
+          </ha-date-input>
+        </div>
       </div>
 
       <span class="header">${hassLocalize('ui.common.name', this.hass)}:</span>
       <div class="period">
-        <ha-textfield
+        <ha-input
           value=${this.schedule.name || ''}
           placeholder=${this.schedule.name
         ? ''
         : hassLocalize('ui.common.name', this.hass)}
           @input=${this.updateName}
-        ></ha-textfield>
+        ></ha-input>
       </div>
 
       <span class="header">${localize('ui.panel.options.tags', this.hass)}:</span>
@@ -191,6 +205,34 @@ export class SchedulerOptionsPanel extends LitElement {
           @value-changed=${this.tagsUpdated}
         >
         </scheduler-combo-selector>
+
+        <ha-dropdown
+          @wa-after-hide=${(ev: Event) => { ev.stopPropagation(); ((ev.target as HTMLElement).querySelector("ha-button") as HTMLInputElement).blur() }}
+          @click=${(ev: Event) => { ev.preventDefault(); ev.stopImmediatePropagation() }}
+          @wa-after-show=${(ev: Event) => { ((ev.target as HTMLElement).querySelector("ha-input") as HTMLInputElement).focus() }}
+          placement="bottom-start"
+        >
+          <ha-button appearance="plain" slot="trigger">
+            <ha-icon slot="start" icon="mdi:plus"></ha-icon>
+            ${hassLocalize('ui.panel.config.tag.add_tag', this.hass)}
+          </ha-button>
+
+          <div style="display: flex; align-items: center; padding: 0px 2px 0px 8px">
+            <ha-input
+              .value=${this.customTagValue}
+              .label=${hassLocalize('ui.panel.config.tag.add_tag', this.hass)}
+              @input=${(ev: Event) => { this.customTagValue = (ev.currentTarget as any).value }}
+              @keydown=${(ev: KeyboardEvent) => { if (ev.key === 'Enter') this._customTagConfirmClick(ev) }}
+              .placeholder=""
+            ></ha-input> 
+            <ha-button
+              appearance="plain"
+              @click=${this._customTagConfirmClick}
+            >
+              ${hassLocalize('ui.common.ok', this.hass)}
+            </ha-button>
+          </div>
+        </ha-dropdown>
       </div>
 
       <span class="header">${localize('ui.panel.options.repeat_type', this.hass)}:</span>
@@ -259,16 +301,14 @@ export class SchedulerOptionsPanel extends LitElement {
         <div slot="header">
           ${condition.entity_id && condition.value !== undefined ? html`
           <ha-icon slot="icon" icon="${computeEntityIcon(condition.entity_id, this.config.customize, this.hass)}"></ha-icon>
-          ${capitalizeFirstLetter(localize(matchTypeValue[condition.match_type!], this.hass, ['{entity}', '{value}'], [computeEntityDisplay(condition.entity_id, this.hass, this.config.customize) || '', formatSelectorDisplay(condition.value, selector, this.hass) || '']))}
+          ${capitalizeFirstLetter(localize(matchTypeValue[condition.match_type!], this.hass, ['{entity}', '{value}'], [computeEntityDisplay(condition.entity_id, this.hass, this.config.customize) || '', formatSelectorDisplay(condition.value, selector, this.hass) ?? '']))}
           ` : localize('ui.panel.options.conditions.add_condition', this.hass)}
         </div>
-        <ha-button-menu
-          slot="contextMenu" 
-          @action=${(ev: CustomEvent) => this._conditionItemOptionsClick(ev, i)}
-          @closed=${(ev: Event) => { ev.stopPropagation() }}
-          @click=${(ev: Event) => { ev.preventDefault(); ev.stopImmediatePropagation() }}
-          fixed
+        <ha-dropdown
+          slot="contextMenu"
+          @wa-select=${(ev: CustomEvent) => this._conditionItemOptionsClick(ev, i)}
           ?disabled=${!this.conditionValid && this.conditionIdx !== i && this.conditionIdx != -1}
+          placement="bottom-end"
         >
           <ha-icon-button
             slot="trigger"
@@ -276,15 +316,15 @@ export class SchedulerOptionsPanel extends LitElement {
             ?disabled=${!this.conditionValid && this.conditionIdx !== i && this.conditionIdx != -1}
           >
           </ha-icon-button>
-          <mwc-list-item graphic="icon">
+          <ha-dropdown-item value="change_type">
+            <ha-icon icon="mdi:pencil"></ha-icon>
             ${hassLocalize('ui.panel.lovelace.editor.card.conditional.change_type', this.hass)}
-            <ha-icon slot="graphic" icon="mdi:pencil"></ha-icon>
-          </mwc-list-item>
-          <mwc-list-item graphic="icon" class="warning">
+          </ha-dropdown-item>
+          <ha-dropdown-item variant="danger" value="delete">
+            <ha-icon icon="mdi:delete"></ha-icon>
             ${hassLocalize('ui.common.delete', this.hass)}
-            <ha-icon slot="graphic" icon="mdi:delete"></ha-icon>
-          </mwc-list-item>
-        </ha-button-menu>
+          </ha-dropdown-item>
+        </ha-dropdown>
 
         <div slot="content">
 
@@ -306,20 +346,22 @@ export class SchedulerOptionsPanel extends LitElement {
         <scheduler-settings-row>
           <span slot="heading">
             ${capitalizeFirstLetter(localize(matchTypeValue[this.conditionIdx == i ? this.selectedMatchType! : condition.match_type!], this.hass, ['{entity}', '{value}'], ['', '']))}
-            <ha-button-menu
-              @action=${(ev: CustomEvent) => this._selectMatchType(ev, matchTypes)}
-              @closed=${(ev: Event) => { ev.stopPropagation() }}
-              fixed
+            <ha-dropdown
+              @wa-select=${this._selectMatchType}
+              @wa-after-hide=${(ev: Event) => { ((ev.target as HTMLElement).firstElementChild as HTMLElement).blur() }}
             >
               <ha-icon-button slot="trigger" .path=${mdiPencil}>
               </ha-icon-button>
               ${matchTypes.map(e => html`
-                <mwc-list-item graphic="icon" ?noninteractive=${this.conditionIdx == i ? this.selectedMatchType == e : condition.match_type == e}>
+                <ha-dropdown-item 
+                  ?noninteractive=${this.conditionIdx == i ? this.selectedMatchType == e : condition.match_type == e}
+                  value="${e}"
+                >
+                  <ha-icon icon="${matchTypeIcons[e]}"></ha-icon>
                   ${capitalizeFirstLetter(localize(matchTypeValue[e], this.hass, ['{entity}', '{value}'], ['', '']))}
-                  <ha-icon slot="graphic" icon="${matchTypeIcons[e]}"></ha-icon>
-                </mwc-list-item>
+                </ha-dropdown-item>
               `)}
-            </ha-button-menu>
+            </ha-dropdown>
           </span>
           <scheduler-combo-selector
             .hass=${this.hass}
@@ -350,9 +392,9 @@ export class SchedulerOptionsPanel extends LitElement {
   }
 
   _conditionItemOptionsClick(ev: CustomEvent, idx: number) {
-    const option = ev.detail.index;
+    const option: 'change_type' | 'delete' = ev.detail.item.value;
     switch (option) {
-      case 0:
+      case "change_type":
         this._showConditionDialog(ev)
           .then(res => {
             if (!res) return;
@@ -364,7 +406,7 @@ export class SchedulerOptionsPanel extends LitElement {
             this.conditionValid = false;
           });
         break;
-      case 1:
+      case "delete":
         const conditions: Condition[] = this.schedule.entries[0].slots[0].conditions.items.filter((_e, i) => i !== idx);
         const updateSlots = (e: Timeslot) => Object.assign(e, { conditions: { ...e.conditions, items: conditions } });
         const updateEntries = (e: ScheduleEntry) => Object.assign(e, { slots: e.slots.map(updateSlots) });
@@ -376,16 +418,9 @@ export class SchedulerOptionsPanel extends LitElement {
     }
   }
 
-  _selectMatchType(ev: CustomEvent, options: TConditionMatchType[]) {
-    const index = ev.detail.index;
-    options = options.filter(e => e != this.selectedMatchType);
-    this.selectedMatchType = options[index];
-
-    ev.preventDefault();
-    const el = ev.target as HTMLElement;
-    setTimeout(() => {
-      (el.firstElementChild as HTMLElement).blur();
-    }, 50);
+  _selectMatchType(ev: CustomEvent) {
+    const value: TConditionMatchType = ev.detail.item.value;
+    this.selectedMatchType = value;
     this._validateCondition();
   }
 
@@ -464,17 +499,17 @@ export class SchedulerOptionsPanel extends LitElement {
 
   _conditionConfigOptionsClick(ev: CustomEvent) {
     let conditionConfig = { ...this.schedule.entries[0].slots[0].conditions };
-    const index = ev.detail.index;
-    switch (index) {
-      case 0:
+    const option: 'and' | 'or' | 'track_changes' = ev.detail.item.value;
+    switch (option) {
+      case 'or':
         if (conditionConfig.type == TConditionLogicType.Or) return;
         conditionConfig = { ...conditionConfig, type: TConditionLogicType.Or };
         break;
-      case 1:
+      case 'and':
         if (conditionConfig.type == TConditionLogicType.And) return;
         conditionConfig = { ...conditionConfig, type: TConditionLogicType.And };
         break;
-      case 2:
+      case 'track_changes':
         const newValue = !this.schedule.entries[0].slots[0].conditions.track_changes;
         conditionConfig = { ...conditionConfig, track_changes: newValue };
         break;
@@ -541,6 +576,24 @@ export class SchedulerOptionsPanel extends LitElement {
     this.schedule = { ...this.schedule, tags: value };
   }
 
+  _customTagConfirmClick(ev: Event) {
+    let target = ev.target as HTMLElement;
+    target = target.parentElement as HTMLElement;
+    target = target.parentElement as HTMLElement;
+    const triggerBtn = target.querySelector("ha-button") as HTMLInputElement;
+    triggerBtn.click();
+    ev.preventDefault();
+
+    let value = String(this.customTagValue).trim();
+    if (value.length) {
+      let tags = this.schedule.tags || [];
+      tags = [...new Set([...tags, value])];
+      tags = tags.filter(e => !['none', 'disabled', 'enabled'].includes(e));
+      this.schedule = { ...this.schedule, tags: tags };
+    }
+    this.customTagValue = "";
+  }
+
   setRepeatType(ev: Event) {
     const value = (ev.target as HTMLElement).getAttribute("value") as TRepeatType;
     this.schedule = { ...this.schedule, repeat_type: value };
@@ -551,26 +604,32 @@ export class SchedulerOptionsPanel extends LitElement {
       ha-icon-button {
         align-self: center;
       }
-      mwc-list-item.warning, mwc-list-item.warning ha-icon {
-        color: var(--error-color);
-      }
-      mwc-list-item[disabled] ha-icon {
+      ha-dropdown-item[disabled] ha-icon {
         color: var(--disabled-text-color);
       }
-      mwc-list-item[noninteractive] {
+      ha-dropdown-item[noninteractive] {
         background-color: rgba(var(--rgb-primary-color), 0.12);
         color: var(--sidebar-selected-text-color);
       }
-      mwc-list-item[noninteractive] ha-icon {
+      ha-dropdown-item[noninteractive] ha-icon {
         color: var(--sidebar-selected-text-color);
       }
       div.period {
         display: flex;
+        width: 100%;
         flex-direction: row;
         align-items: center;
         gap: 5px;
       }
-      ha-textfield {
+      div.period > div {
+        display: flex;
+      }
+      div.period > div.input {
+        position: relative;
+        overflow: hidden;
+        flex: 1;
+      }
+      ha-date-input, ha-input {
         width: 100%;
       }
       .header {
@@ -588,7 +647,7 @@ export class SchedulerOptionsPanel extends LitElement {
       .header > * {
         display: flex;
       }
-      .header ha-button-menu {
+      .header ha-dropdown {
         margin-bottom: -10px;
       }
     `;

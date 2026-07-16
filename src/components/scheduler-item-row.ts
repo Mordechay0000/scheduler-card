@@ -23,7 +23,7 @@ export class SchedulerItemRow extends LitElement {
     try {
       const stateObj = this.hass.states[this.schedule.entity_id!];
       if (!stateObj) return html``;
-      const disabled = stateObj.state == 'off';
+      const disabled = ['off', 'completed'].includes(stateObj.state);
       const nextAction = this.schedule.entries[0].slots[this.schedule.next_entries[0] || 0].actions[0];
 
       let icon = computeActionIcon(nextAction, this.config.customize);
@@ -52,10 +52,13 @@ export class SchedulerItemRow extends LitElement {
         </div>
       </div>
       <div class="state">
-        <ha-entity-toggle
-          .hass=${this.hass}
-          .stateObj=${stateObj}
-        ></ha-entity-toggle>
+        ${this.config.show_toggle_switches !== false
+          ? html`<ha-switch
+              ?checked=${['on', 'triggered'].includes(stateObj.state || '')}
+              ?disabled=${stateObj.state == 'completed'}
+              @change=${this._toggleEnableDisable}
+            ></ha-switch>`
+          : ''}
       </div>
 
     `;
@@ -114,6 +117,11 @@ export class SchedulerItemRow extends LitElement {
     this.dispatchEvent(myEvent);
   }
 
+  private _toggleEnableDisable(ev: Event) {
+    const checked = (ev.target as HTMLInputElement).checked;
+    this.hass.callService('switch', checked ? 'turn_on' : 'turn_off', { entity_id: this.schedule.entity_id });
+  }
+
 
   static get styles(): CSSResultGroup {
     return css`
@@ -130,6 +138,7 @@ export class SchedulerItemRow extends LitElement {
         flex: 1 1 30%;
         transition: color 0.2s ease-in-out;
         cursor: pointer;
+        line-height: var(--ha-line-height-normal);
       }
       .info,
       .info > * {

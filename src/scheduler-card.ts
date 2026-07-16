@@ -16,10 +16,12 @@ import { fetchScheduleItem } from "./data/store/fetch_item";
 import { fireEvent } from "./lib/fire_event";
 import { hassLocalize } from "./localize/hassLocalize";
 import { loadConfigFromEntityRegistry } from "./data/load_config_from_entity_registry";
+import { isDefined } from "./lib/is_defined";
 
 import './scheduler-card-editor';
 import "./dialogs/dialog-scheduler-editor";
 import "./components/scheduler-item-row";
+import { entityIncludedByConfig } from "./data/actions/entity_included_by_config";
 
 @customElement('scheduler-card')
 export class SchedulerCard extends LitElement {
@@ -49,6 +51,9 @@ export class SchedulerCard extends LitElement {
 
     await loadConfigFromEntityRegistry(this.hass)
       .then(extraConfig => {
+        extraConfig = Object.fromEntries(
+          Object.entries(extraConfig).filter(([k]) => entityIncludedByConfig(k, this._config))
+        );
         this._config = {
           ...this._config,
           customize: { ...extraConfig, ...(this._config.customize || {}) }
@@ -145,11 +150,12 @@ export class SchedulerCard extends LitElement {
       <ha-card>
         <div class="card-header">
           <div class="name">
-            ${this._config.title
-        ? typeof this._config.title == 'string'
-          ? this._config.title
-          : localize('ui.panel.common.title', this.hass)
-        : ''}
+            ${!isDefined(this._config.title) || (typeof this._config.title === 'boolean' && this._config.title)
+        ? localize('ui.panel.common.title', this.hass)
+        : typeof this._config.title == 'boolean'
+          ? ''
+          : this._config.title
+      }
           </div>
 
           ${Object.keys(this.schedules || {}).length && this._config.show_header_toggle

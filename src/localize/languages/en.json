@@ -1,6 +1,8 @@
 {
   "services": {
     "generic": {
+      "turn_on": "Turn on",
+      "turn_off": "Turn off",
       "parameter_to_value": "{parameter} to {value}",
       "action_with_parameter": "{action} with {parameter}"
     },
@@ -111,7 +113,8 @@
         "no_results": "No matching items found"
       },
       "action_picker": {
-        "title": "Choose action"
+        "title": "Choose action",
+        "show_all": "Show all supported entities"
       }
     },
     "panel": {
@@ -229,6 +232,10 @@
           "show_header_toggle": {
             "heading": "Show header toggle",
             "description": "Show toggle switch at the top of the card for enabling/disabling all entities"
+          },
+          "show_toggle_switches": {
+            "heading": "Show toggle switches",
+            "description": "Show toggle switch for each individual schedule in the card"
           },
           "tags": {
             "heading": "Tags",

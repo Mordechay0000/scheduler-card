@@ -1,4 +1,5 @@
 import { computeDomain, computeEntity } from "../../lib/entity";
+import { isDefined } from "../../lib/is_defined";
 import { HomeAssistant } from "../../lib/types";
 import { hassLocalize } from "../../localize/hassLocalize";
 import { Action, CustomConfig } from "../../types";
@@ -21,14 +22,15 @@ export const formatFieldDisplay = (action: Action, field: string, hass: HomeAssi
   ) name = String(hass.services[domain][action.service].fields[field].name);
 
   const entityIds = ['script', 'notify'].includes(domain) ? [action.service] : [action.target?.entity_id || []].flat();
-  let actionConfig = parseCustomActions(customize || {}, entityIds.length ? entityIds[0] : domain);
+  const filterKey = entityIds.length ? entityIds[0] : action.service;
+  let actionConfig = parseCustomActions(customize || {}, filterKey);
   if (actionConfig.length) {
     let res = actionConfig.map(customConfig => {
       if (customConfig.service != action.service || !Object.keys(customConfig.variables || {}).includes(field)) return null;
       let variableConfig = (customConfig.variables || {})[field];
       return variableConfig.name;
     })
-      .filter(e => e !== undefined);
+      .filter(isDefined);
     if (res.length) return res[0];
   }
 

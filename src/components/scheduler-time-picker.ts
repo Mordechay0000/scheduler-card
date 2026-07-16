@@ -9,6 +9,7 @@ import { HomeAssistant } from "../lib/types";
 import { AmPmFormat, convertTo12Hour, convertTo24Hour, useAmPm } from "../lib/use_am_pm";
 import { fireEvent } from "../lib/fire_event";
 import { hassLocalize } from "../localize/hassLocalize";
+import { roundTime } from "../data/time/round_time";
 
 const MAX_OFFFSET_HOURS = 4;
 
@@ -82,7 +83,7 @@ export class SchedulerTimePicker extends LitElement {
               <ha-icon icon="mdi:chevron-up"></ha-icon>
             </ha-button>
             ` : nothing}
-            <ha-textfield
+            <ha-input
               id="hour"
               inputmode="numeric"
               .value=${this.formatHours()}
@@ -90,18 +91,15 @@ export class SchedulerTimePicker extends LitElement {
               name="hours"
               @change=${this._hoursChanged}
               @focusin=${this._onFocus}
-              no-spinner
               .required=${this.required}
               .autoValidate=${this.autoValidate}
               maxlength="2"
               max=${this.mode == TimeMode.Fixed ? this.useAmPm ? 12 : 23 : MAX_OFFFSET_HOURS}
               min=${this.mode != TimeMode.Fixed && !this.large ? -MAX_OFFFSET_HOURS : 0}
               .disabled=${this.disabled}
-              suffix="${this.large ? '' : ':'}"
-              class="${this.large ? '' : 'hasSuffix'}"
               .validityTransform=${_validateHourInput}
             >
-            </ha-textfield>
+            </ha-input>
             ${this.large ? html`
             <ha-button
               appearance="plain"
@@ -112,7 +110,7 @@ export class SchedulerTimePicker extends LitElement {
             </ha-button>
             ` : nothing}
           </div>
-          ${this.large ? html`<div class="separator">:</div>` : nothing}
+          <div class="time-separator">:</div>
           <div class="minutes">
             ${this.large ? html`
             <ha-button
@@ -123,16 +121,14 @@ export class SchedulerTimePicker extends LitElement {
               <ha-icon icon="mdi:chevron-up"></ha-icon>
             </ha-button>
             ` : nothing}
-            <ha-textfield
+            <ha-input
               id="min"
-              type="number"
               inputmode="numeric"
               .value=${this.formatMinutes()}
               label=""
               @change=${this._minutesChanged}
               @focusin=${this._onFocus}
               name="minutes"
-              no-spinner
               .required=${this.required}
               .autoValidate=${this.autoValidate}
               maxlength="2"
@@ -140,10 +136,8 @@ export class SchedulerTimePicker extends LitElement {
               min="0"
               .disabled=${this.disabled}
               .validityTransform=${_validateMinuteInput}
-              suffix=""
-              class=""
             >
-            </ha-textfield>
+            </ha-input>
             ${this.large ? html`
             <ha-button
               appearance="plain"
@@ -179,7 +173,7 @@ export class SchedulerTimePicker extends LitElement {
           ${this.hass.states['sun.sun']
           ? html`
           <ha-button
-            appearance="${this.mode == TimeMode.Fixed ? 'plain' : 'filled'}"
+            appearance="${this.mode == TimeMode.Fixed ? 'plain' : 'accent'}"
             variant="${this.mode == TimeMode.Fixed ? 'neutral' : 'brand'}"
             @click=${_toggleTimeMode}
           >
@@ -221,29 +215,20 @@ export class SchedulerTimePicker extends LitElement {
       };
 
 
-      const _handleMenuAction = (ev: CustomEvent, options: TimeMode[]) => {
-        const index = ev.detail.index;
-        options = options.filter(e => e != this.mode);
-        const newMode = options[index];
-
+      const _handleMenuAction = (ev: CustomEvent) => {
+        const newMode: TimeMode = ev.detail.item.value;
+        if (this.mode == newMode) return;
         const newTime = this._convertTimeMode(newMode);
         this.hours = newTime.hours;
         this.minutes = newTime.minutes;
         this.mode = newMode;
-
-        ev.preventDefault();
-        const el = ev.target as HTMLElement;
-        setTimeout(() => {
-          (el.firstElementChild as HTMLElement).blur();
-        }, 50);
         this._valueChanged();
       }
 
       return html`
-      <ha-button-menu
-        @action=${(ev: CustomEvent) => _handleMenuAction(ev, modeOptions)}
-        @closed=${(ev: Event) => { ev.stopPropagation() }}
-        fixed
+      <ha-dropdown
+        @wa-select=${_handleMenuAction}
+        @wa-after-hide=${(ev: Event) => { ((ev.target as HTMLElement).firstElementChild as HTMLElement).blur() }}
         ?disabled=${this.disabled}
       >
         <ha-icon-button
@@ -253,16 +238,18 @@ export class SchedulerTimePicker extends LitElement {
         >
         </ha-icon-button>
         ${modeOptions.map(e => html`
-        <mwc-list-item graphic="icon" ?noninteractive=${this.mode == e} ?disabled=${isDisabled(e)}>
-          ${modeOptionLabels[e]}
+        <ha-dropdown-item
+          ?noninteractive=${this.mode == e}
+          ?disabled=${isDisabled(e) && this.mode != e}
+          value="${e}"
+        >
           <ha-icon
-            slot="graphic"
             icon="${modeOptionIcons[e]}"
           ></ha-icon>
-        </mwc-list-item>
-        
+          ${modeOptionLabels[e]}
+        </ha-dropdown-item>
         `)}
-      </ha-button-menu>
+      </ha-dropdown>
     `;
     }
   }
@@ -328,8 +315,8 @@ export class SchedulerTimePicker extends LitElement {
           @selected=${this._amPmChanged}
           @closed=${(ev: Event) => { ev.stopPropagation() }}
         >
-          <mwc-list-item value="AM">AM</mwc-list-item>
-          <mwc-list-item value="PM">PM</mwc-list-item>
+          <ha-dropdown-item value="AM">AM</ha-dropdown-item>
+          <ha-dropdown-item value="PM">PM</ha-dropdown-item>
         </ha-select>
       `;
     }
@@ -385,8 +372,8 @@ export class SchedulerTimePicker extends LitElement {
     this._valueChanged();
   }
 
-  private _amPmChanged(ev: InputEvent) {
-    const value = (ev.target as HTMLInputElement).value;
+  private _amPmChanged(ev: CustomEvent) {
+    const value = ev.detail.value;
     const oldValue = convertTo12Hour(this.hours).am_pm;
     if (oldValue == value) return;
     const hours12 = convertTo12Hour(this.hours).hours;
@@ -398,6 +385,7 @@ export class SchedulerTimePicker extends LitElement {
     let time: Time = { mode: this.mode, hours: this.hours, minutes: this.minutes };
 
     time = addTimeOffset(time, offset);
+    if (offset.minutes) time = roundTime(time, this.stepSize);
     if (this.mode != TimeMode.Fixed) time = limitOffset(time);
 
     this.hours = time.hours;
@@ -465,41 +453,75 @@ export class SchedulerTimePicker extends LitElement {
     div.hours ha-icon, div.minutes ha-icon {
       --mdc-icon-size: 42px;
     }
-    div.separator {
+    .time-separator {
+      background-color: var(--ha-color-form-background);
+      color: var(--ha-color-text-secondary);
+      border-bottom: 1px solid var(--ha-color-border-neutral-loud);
+      box-sizing: border-box;
+      height: 56px;
+      width: 9px;
       display: flex;
       align-items: center;
+      align-self: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    :host([disabled]) .time-separator {
+      background-color: var(--ha-color-form-background-disabled);
+      opacity: 0.5;
+    }
+    :host([large]) .time-separator {
+      background: none;
+      border: none;
       font-size: 36px;
     }
-    ha-textfield {
+    ha-input {
       width: 40px;
-      text-align: center;
       --mdc-shape-small: 0;
       --text-field-appearance: none;
-      --text-field-padding: 0 4px;
+      --text-field-padding-top: 0;
+      --text-field-padding-bottom: 0;
+      --text-field-padding-start: 4px;
+      --text-field-padding-end: 4px;
       --text-field-suffix-padding-left: 2px;
       --text-field-suffix-padding-right: 0;
-      --text-field-text-align: center;
+      --ha-input-text-align: center;
+      --ha-input-padding-top: 0px;
+      --ha-input-padding-bottom: 0px;
     }
-    :host([large]) ha-textfield {
-      width: auto;
-      --mdc-typography-subtitle1-font-size: 42px;
-      --mdc-text-field-outlined-idle-border-color: var(--card-background-color);
-      --mdc-text-field-outlined-hover-border-color: var(--card-background-color);
+    ha-input::part(wa-input) {
+      text-align: center;
     }
-    ha-textfield.hasSuffix {
-      --text-field-padding: 0 0 0 4px;
+    ha-input::part(wa-hint) {
+      height: 0;
+      min-height: 0;
     }
-    ha-textfield:first-child {
-      --text-field-border-top-left-radius: var(--mdc-shape-medium);
+    ha-input::part(wa-base) {
+      padding: var(--ha-space-1);
     }
-    ha-textfield:last-child {
-      --text-field-border-top-right-radius: var(--mdc-shape-medium);
+    ha-input#hour::part(wa-base) {
+      border-top-right-radius: 0px;
+    }
+    ha-input#min::part(wa-base) {
+      border-top-left-radius: 0px;
+    }
+    :host([large]) ha-input#hour::part(wa-base),
+    :host([large]) ha-input#min::part(wa-base) {
+      border-top-right-radius: var(--ha-border-radius-sm);
+      border-top-left-radius: var(--ha-border-radius-sm);
+    }
+    :host([large]) ha-input {
+      width: 75px;
+      --wa-form-control-value-font-size: 42px;
     }
     div.suffix {
       display: flex;
       flex-direction: row;
       flex-grow: 1;
       align-items: center;
+      flex-wrap: wrap;
+      align-content: center;
     }
     div.mode {
       display: flex;
@@ -510,7 +532,7 @@ export class SchedulerTimePicker extends LitElement {
     }
     ha-select {
       --mdc-shape-small: 0;
-      width: 85px;
+      width: 90px;
     }
     .label {
       display: flex;
@@ -518,31 +540,37 @@ export class SchedulerTimePicker extends LitElement {
       align-self: center;
       white-space: nowrap;
     }
-    ha-button-menu {
+    ha-dropdown-menu {
       display: flex;
       align-items: flex-end;
       margin-right: 4px;
       padding-bottom: 4px;
     }
-    ha-button-menu ha-icon-button {
+    ha-dropdown-menu ha-icon-button {
       color: var(--secondary-text-color);
     }
-    mwc-list-item[disabled] ha-icon {
+    ha-dropdown-item[disabled] ha-icon {
       color: var(--disabled-text-color);
     }
-    mwc-list-item[noninteractive] {
+    ha-dropdown-item[noninteractive] {
       background-color: rgba(var(--rgb-primary-color), 0.12);
       color: var(--sidebar-selected-text-color);
     }
-    mwc-list-item[noninteractive] ha-icon {
+    ha-dropdown-item[noninteractive] ha-icon {
       color: var(--sidebar-selected-text-color);
     }
     ha-button {
       --ha-button-border-radius: 8px;
+      --button-color-fill-loud-hover: var(--ha-color-primary-50);
     }
     ha-button span.large {
       font-size: 16px;
       text-transform: uppercase;
+    }
+    @media all and (max-width: 450px), all and (max-height: 500px) {
+      ha-button {
+        --wa-form-control-padding-inline: 10px;
+      }
     }
   `;
 }

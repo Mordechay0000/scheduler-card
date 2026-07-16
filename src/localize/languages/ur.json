@@ -1,6 +1,8 @@
 {
   "services": {
     "generic": {
+      "turn_on": "پر سوئچ کریں",
+      "turn_off": "بند کر دیں",
       "parameter_to_value": "{parameter} کو {value} پر سیٹ کریں",
       "action_with_parameter": "{parameter} کے ساتھ {action}"
     },
@@ -111,7 +113,8 @@
         "no_results": "کوئی مماثل آئٹمز نہیں ملے"
       },
       "action_picker": {
-        "title": "عمل منتخب کریں"
+        "title": "عمل منتخب کریں",
+        "show_all": "تمام تعاون یافتہ اداروں کو دکھائیں۔"
       }
     },
     "panel": {
@@ -229,6 +232,10 @@
           "show_header_toggle": {
             "heading": "ہیڈر ٹوگل دکھائیں",
             "description": "کارڈ کے اوپر تمام اینٹیٹیز کو فعال/غیر فعال کرنے کے لیے سوئچ دکھائیں"
+          },
+          "show_toggle_switches": {
+            "heading": "ٹوگل سوئچز دکھائیں",
+            "description": "کارڈ میں ہر انفرادی شیڈول کے لیے ٹوگل سوئچ دکھائیں"
           },
           "tags": {
             "heading": "ٹیگز",

@@ -1,5 +1,5 @@
 import { css, html, LitElement } from "lit";
-import { customElement, property } from "lit/decorators";
+import { customElement, property, state } from "lit/decorators";
 import { DialogSelectEntitiesParams } from "./dialogs/dialog-select-entities";
 import { HomeAssistant } from "./lib/types";
 import { localize } from "./localize/localize";
@@ -11,6 +11,7 @@ import { sortByName } from "./lib/sort";
 import { mdiArrowRight } from "@mdi/js";
 import { DEFAULT_PRIMARY_INFO_DISPLAY, DEFAULT_SECONDARY_INFO_DISPLAY, DEFAULT_SORT_BY, DEFAULT_TIME_STEP } from "./const";
 import { loadConfigFromEntityRegistry } from "./data/load_config_from_entity_registry";
+import { hassLocalize } from "./localize/hassLocalize";
 
 import './dialogs/dialog-select-entities';
 import "./components/scheduler-entity-picker";
@@ -32,7 +33,9 @@ export class SchedulerCardEditor extends LitElement {
   title: string = "";
 
   @property()
-  tagOptions: string[] = [];
+  tagOptions: string[] = []
+
+  @state() customTagValue: string = '';
 
   async firstUpdated() {
     this.title = typeof this._config.title == "string"
@@ -82,12 +85,12 @@ export class SchedulerCardEditor extends LitElement {
           </ha-checkbox>
           <span slot="heading">${localize('ui.panel.card_editor.fields.title.heading', this.hass)}</span>
 
-          <ha-textfield
+          <ha-input
             .value=${this.title}
             @input=${this._setTitle}
             .placeholder=${localize('ui.panel.common.title', this.hass)}
             ?disabled=${this._config.title === false}
-          ></ha-textfield>
+          ></ha-input>
 
         </scheduler-settings-row>
 
@@ -112,6 +115,16 @@ export class SchedulerCardEditor extends LitElement {
             ></ha-switch>
           </ha-formfield>
         </div>
+        <div class="column">
+          <ha-formfield label="${localize('ui.panel.card_editor.fields.show_toggle_switches.heading', this.hass)}">
+            <ha-switch
+              ?checked=${this._config.show_toggle_switches !== false}
+              @change=${(ev: Event) => {
+        this._updateConfig({ show_toggle_switches: (ev.target as HTMLInputElement).checked });
+      }}
+            ></ha-switch>
+          </ha-formfield>
+        </div>
         </div>
 
         <scheduler-settings-row>
@@ -128,93 +141,72 @@ export class SchedulerCardEditor extends LitElement {
 
         <span>${localize('ui.panel.card_editor.fields.default_editor.heading', this.hass)}</span>
         <div class="two-columns">
-          <div class="column">
-            <ha-formfield label="${localize('ui.panel.card_editor.fields.default_editor.options.single', this.hass)}">
-              <ha-radio
-                name="default_editor"
-                value="${EditorMode.Single}"
-                @change=${() => { this._updateConfig({ default_editor: EditorMode.Single }) }}
-                ?checked=${this._config.default_editor != EditorMode.Scheme}
-              >
-              </ha-radio>
-            </ha-formfield>
+          <div class="column radio"
+            @click=${() => { this._updateConfig({ default_editor: EditorMode.Single }) }}
+          >
+            <ha-icon
+              icon="${this._config.default_editor != EditorMode.Scheme ? 'mdi:radiobox-marked' : 'mdi:radiobox-blank'}"
+              class="${this._config.default_editor != EditorMode.Scheme ? 'checked' : ''}"
+            ></ha-icon>
+            <span>${localize('ui.panel.card_editor.fields.default_editor.options.single', this.hass)}</span>
           </div>
-          <div class="column">
-            <ha-formfield label="${localize('ui.panel.card_editor.fields.default_editor.options.scheme', this.hass)}">
-              <ha-radio
-                name="default_editor"
-                value="${EditorMode.Scheme}"
-                @change=${() => { this._updateConfig({ default_editor: EditorMode.Scheme }) }}
-                ?checked=${this._config.default_editor == EditorMode.Scheme}
-              >
-              </ha-radio>
-            </ha-formfield>
+          <div class="column radio"
+            @click=${() => { this._updateConfig({ default_editor: EditorMode.Scheme }) }}
+          >
+            <ha-icon
+              icon="${this._config.default_editor == EditorMode.Scheme ? 'mdi:radiobox-marked' : 'mdi:radiobox-blank'}"
+              class="${this._config.default_editor == EditorMode.Scheme ? 'checked' : ''}"
+            ></ha-icon>
+            <span>${localize('ui.panel.card_editor.fields.default_editor.options.scheme', this.hass)}</span>
           </div>
         </div>
 
           <span slot="heading">${localize('ui.panel.card_editor.fields.sort_by.heading', this.hass)}</span>
 
         <div class="two-columns">
-        <div class="column">
-
-          <ha-formfield label="${localize('ui.panel.card_editor.fields.sort_by.options.relative_time', this.hass)}">
-            <ha-radio
-              name="sort_by"
-              value="relative-time"
-              @change=${this._setSortBy}
-              ?checked=${[this._config.sort_by || DEFAULT_SORT_BY].flat().includes('relative-time')}
-            ></ha-radio>
-          </ha-formfield>
-
-        </div>
-        <div class="column">
-
-          <ha-formfield label="${localize('ui.panel.card_editor.fields.sort_by.options.title', this.hass)}">
-            <ha-radio
-              name="sort_by"
-              value="title"
-              @change=${this._setSortBy}
-              ?checked=${[this._config.sort_by || DEFAULT_SORT_BY].flat().includes('title')}
-            ></ha-radio>
-          </ha-formfield>
-        </div>
+          <div class="column radio"
+            @click=${() => { this._setSortBy('relative-time') }}
+          >
+            <ha-icon
+              icon="${[this._config.sort_by || DEFAULT_SORT_BY].flat().includes('relative-time') ? 'mdi:radiobox-marked' : 'mdi:radiobox-blank'}"
+              class="${[this._config.sort_by || DEFAULT_SORT_BY].flat().includes('relative-time') ? 'checked' : ''}"
+            ></ha-icon>
+            <span>${localize('ui.panel.card_editor.fields.sort_by.options.relative_time', this.hass)}</span>
+          </div>
+          <div class="column radio"
+            @click=${() => { this._setSortBy('title') }}
+          >
+            <ha-icon
+              icon="${[this._config.sort_by || DEFAULT_SORT_BY].flat().includes('title') ? 'mdi:radiobox-marked' : 'mdi:radiobox-blank'}"
+              class="${[this._config.sort_by || DEFAULT_SORT_BY].flat().includes('title') ? 'checked' : ''}"
+            ></ha-icon>
+            <span>${localize('ui.panel.card_editor.fields.sort_by.options.title', this.hass)}</span>
+          </div>
         </div>
 
-
-          <span>${localize('ui.panel.card_editor.fields.display_format_primary.heading', this.hass)}</span>
-
+        <span>${localize('ui.panel.card_editor.fields.display_format_primary.heading', this.hass)}</span>
 
         <div class="two-columns">
-        <div class="column">
-
-          <ha-formfield label="${localize('ui.panel.card_editor.fields.display_format_primary.options.default', this.hass)}">
-            <ha-radio
-              name="display_format_primary"
-              value="default"
-              @change=${this._setDisplayOptionsPrimary}
-              ?checked=${[this._config.display_options?.primary_info || DEFAULT_PRIMARY_INFO_DISPLAY].flat().includes('default')}
-            >
-            </ha-radio>
-          </ha-formfield>
-
+          <div class="column radio"
+            @click=${() => { this._setDisplayOptionsPrimary('default') }}
+          >
+            <ha-icon
+              icon="${[this._config.display_options?.primary_info || DEFAULT_PRIMARY_INFO_DISPLAY].flat().includes('default') ? 'mdi:radiobox-marked' : 'mdi:radiobox-blank'}"
+              class="${[this._config.display_options?.primary_info || DEFAULT_PRIMARY_INFO_DISPLAY].flat().includes('default') ? 'checked' : ''}"
+            ></ha-icon>
+            <span>${localize('ui.panel.card_editor.fields.display_format_primary.options.default', this.hass)}</span>
+          </div>
+          <div class="column radio"
+            @click=${() => { this._setDisplayOptionsPrimary('{entity}: {action}') }}
+          >
+            <ha-icon
+              icon="${[this._config.display_options?.primary_info || DEFAULT_PRIMARY_INFO_DISPLAY].flat().includes('{entity}: {action}') ? 'mdi:radiobox-marked' : 'mdi:radiobox-blank'}"
+              class="${[this._config.display_options?.primary_info || DEFAULT_PRIMARY_INFO_DISPLAY].flat().includes('{entity}: {action}') ? 'checked' : ''}"
+            ></ha-icon>
+            <span>${localize('ui.panel.card_editor.fields.display_format_primary.options.entity_action', this.hass)}</span>
+          </div>
         </div>
-        <div class="column">
-
-          <ha-formfield label="${localize('ui.panel.card_editor.fields.display_format_primary.options.entity_action', this.hass)}">
-            <ha-radio
-              name="display_format_primary"
-              value="{entity}: {action}"
-              @change=${this._setDisplayOptionsPrimary}
-              ?checked=${[this._config.display_options?.primary_info || DEFAULT_PRIMARY_INFO_DISPLAY].flat().includes('{entity}: {action}')}
-            >
-            </ha-radio>
-          </ha-formfield>
-
-        </div>
-
-        </div>
-
-          <span>${localize('ui.panel.card_editor.fields.display_format_secondary.heading', this.hass)}</span>
+        <span>${localize('ui.panel.card_editor.fields.display_format_secondary.heading', this.hass)}</span>
 
         <div class="two-columns">
         <div class="column">
@@ -261,14 +253,42 @@ export class SchedulerCardEditor extends LitElement {
 
         <scheduler-settings-row>
           <span slot="heading">${localize('ui.panel.card_editor.fields.tags.heading', this.hass)}</span>
+          <div style="display: flex; flex: 1; flex-direction: column">
+            <scheduler-combo-selector
+              .hass=${this.hass}
+              .config=${tagSelector}
+              .value=${[this._config.tags || []].flat()}
+              @value-changed=${(ev: CustomEvent) => { this._updateConfig({ tags: ev.detail.value }) }}
+            >
+            </scheduler-combo-selector>
+              
+            <ha-dropdown
+              @wa-after-hide=${(ev: Event) => { ev.stopPropagation(); ((ev.target as HTMLElement).querySelector("ha-button") as HTMLInputElement).blur() }}
+              @click=${(ev: Event) => { ev.preventDefault(); ev.stopImmediatePropagation() }}
+              @wa-after-show=${(ev: Event) => { ((ev.target as HTMLElement).querySelector("ha-input") as HTMLInputElement).focus() }}
+              placement="bottom-start"
+            >
+              <ha-button appearance="plain" slot="trigger">
+                <ha-icon slot="start" icon="mdi:plus"></ha-icon>
+                ${hassLocalize('ui.panel.config.tag.add_tag', this.hass)}
+              </ha-button>
 
-          <scheduler-combo-selector
-            .hass=${this.hass}
-            .config=${tagSelector}
-            .value=${[this._config.tags || []].flat()}
-            @value-changed=${(ev: CustomEvent) => { this._updateConfig({ tags: ev.detail.value }) }}
-          >
-          </scheduler-combo-selector>
+              <div style="display: flex; align-items: center; padding: 0x 2px 0px 8px">
+                <ha-input
+                  .value=${this.customTagValue}
+                  .label=${hassLocalize('ui.panel.config.tag.add_tag', this.hass)}
+                  @input=${(ev: Event) => { this.customTagValue = (ev.currentTarget as any).value }}
+                  .placeholder=""
+                ></ha-input> 
+                <ha-button
+                  appearance="plain"
+                  @click=${this._customTagConfirmClick}
+                >
+                  ${hassLocalize('ui.common.ok', this.hass)}
+                </ha-button>
+              </div>
+            </ha-dropdown>
+          </div>
         </scheduler-settings-row>
 
       </div>
@@ -289,16 +309,14 @@ export class SchedulerCardEditor extends LitElement {
     else this._updateConfig({ title: true });
   }
 
-  private _setSortBy(ev: Event) {
-    const value = (ev.target as HTMLInputElement).value;
+  private _setSortBy(value: string) {
     let config = [this._config?.sort_by || DEFAULT_SORT_BY].flat();
     config = config.filter(e => e == 'state');
     if (!config.includes(value)) config = [...config, value];
     this._updateConfig({ sort_by: config });
   }
 
-  private _setDisplayOptionsPrimary(ev: Event) {
-    const value = (ev.target as HTMLInputElement).value;
+  private _setDisplayOptionsPrimary(value: string) {
     const displayOptions = {
       ...this._config?.display_options,
       primary_info: value,
@@ -361,6 +379,22 @@ export class SchedulerCardEditor extends LitElement {
 
   }
 
+  _customTagConfirmClick(ev: Event) {
+    let target = ev.target as HTMLElement;
+    target = target.parentElement as HTMLElement;
+    target = target.parentElement as HTMLElement;
+    const triggerBtn = target.querySelector("ha-button");
+    (triggerBtn as any).click();
+
+    let value = String(this.customTagValue).trim();
+    if (value.length) {
+      let tags = [this._config.tags || []].flat();
+      tags = [...new Set([...tags, value])];
+      this._updateConfig({ tags: tags });
+    }
+    this.customTagValue = "";
+  }
+
   private _updateConfig(changes: Partial<CardConfig>) {
     if (!this._config) return;
     this._config = { ...this._config, ...changes };
@@ -398,7 +432,7 @@ export class SchedulerCardEditor extends LitElement {
       text-overflow: ellipsis;
     }
 
-    ha-textfield {
+    ha-input {
       width: 100%;
     }
     div.two-columns {
@@ -407,7 +441,6 @@ export class SchedulerCardEditor extends LitElement {
     }
     div.two-columns .column {
       flex: 50%;
-    
     }
     div.two-columns .column > * {
       display: flex; 
@@ -415,6 +448,39 @@ export class SchedulerCardEditor extends LitElement {
     }
     scheduler-combo-selector {
       min-width: 240px;
+    }
+    ha-dropdown {
+      display: block;
+    }
+    ha-checkbox {
+      padding: 8px 0px;
+    }
+    div.radio {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      font-size: 0.875rem;
+      padding-bottom: 8px;
+      gap: 8px;
+    }
+    div.radio > * {
+      display: flex;
+      cursor: pointer;
+      user-select: none; 
+    }
+    div.radio ha-icon {
+      color: var(--ha-color-neutral-60);
+      transition: color 0.1s ease-in-out;
+      padding: 4px 0px;
+    }
+    div.radio ha-icon:hover {
+      color: var(--ha-color-neutral-40);
+    }
+    div.radio ha-icon.checked {
+      color: var(--ha-color-fill-primary-loud-resting);
+    }
+    div.radio ha-icon.checked:hover {
+      color: var(--ha-color-fill-primary-loud-hover);
     }
   `;
 }

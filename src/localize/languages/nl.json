@@ -1,6 +1,8 @@
 {
   "services": {
     "generic": {
+      "turn_on": "Aanzetten",
+      "turn_off": "Uitzetten",
       "parameter_to_value": "{parameter} naar {value}",
       "action_with_parameter": "{action} met {parameter}"
     },
@@ -111,7 +113,8 @@
         "no_results": "Geen overeenkomstige items gevonden"
       },
       "action_picker": {
-        "title": "Kies actie"
+        "title": "Kies actie",
+        "show_all": "Toon alle ondersteunde entiteiten"
       }
     },
     "panel": {
@@ -229,6 +232,10 @@
           "show_header_toggle": {
             "heading": "Hoofdschakelaar weergeven",
             "description": "Schakelaar weergeven bovenin de kaart om alle schema's te (de)activeren"
+          },
+          "show_toggle_switches": {
+            "heading": "Schakelknoppen weergeven",
+            "description": "Schakelknop weergeven voor elk individueel schema in de kaart"
           },
           "tags": {
             "heading": "Tags",

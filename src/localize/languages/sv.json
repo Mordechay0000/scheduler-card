@@ -1,6 +1,8 @@
 {
   "services": {
     "generic": {
+      "turn_on": "Slå på",
+      "turn_off": "Stäng av",
       "parameter_to_value": "{parameter} till {value}",
       "action_with_parameter": "{action} med {parameter}"
     },
@@ -111,7 +113,8 @@
         "no_results": "Inga matchande objekt hittades"
       },
       "action_picker": {
-        "title": "Välj åtgärd"
+        "title": "Välj åtgärd",
+        "show_all": "Visa alla enheter som stöds"
       }
     },
     "panel": {
@@ -229,6 +232,10 @@
           "show_header_toggle": {
             "heading": "Visa rubrikväxling",
             "description": "Visa växlingsknappen högst upp på kortet för att aktivera/inaktivera alla enheter"
+          },
+          "show_toggle_switches": {
+            "heading": "Visa växlingsknappar",
+            "description": "Visa växlingsknappen för varje enskilt schema i kortet"
           },
           "tags": {
             "heading": "Taggar",

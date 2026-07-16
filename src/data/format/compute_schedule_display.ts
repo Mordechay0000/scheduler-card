@@ -38,7 +38,20 @@ export const computeScheduleDisplay = (schedule: Schedule, config: (DisplayItem 
         return schedule.tags?.map(e => `<tag>${e}</tag>`).join('');
       case DisplayItem.Time:
         const slot = schedule.entries[0].slots[schedule.next_entries[0] || 0];
-        return capitalizeFirstLetter(computeTimeDisplay(slot.start, slot.stop, hass));
+        const timeDisplay = computeTimeDisplay(slot.start, slot.stop, hass);
+        if (timeDisplay && timeDisplay.trim()) return capitalizeFirstLetter(timeDisplay);
+
+        // fallback: construct a minimal time string if localization failed
+        // Basic fallback without localization: show start[-stop] in HH:MM
+        const parse = (s: string) => {
+          try {
+            const parts = s.split(':').map(Number);
+            return `${String(parts[0]).padStart(2, '0')}:${String(parts[1]).padStart(2, '0')}`;
+          } catch (e) {
+            return String(s);
+          }
+        }
+        return capitalizeFirstLetter(slot.stop ? `${parse(slot.start)} - ${parse(slot.stop)}` : `${parse(slot.start)}`);
       case DisplayItem.Default:
         const nameDisplay = computeDisplay(DisplayItem.Name);
         return nameDisplay
