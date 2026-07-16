@@ -56,9 +56,7 @@ export class SchedulerTimeslotEditor extends LitElement {
   render() {
     return html`
       <div class="slots-wrapper">
-        <div class="boundaries">
-          ${this.renderBoundaries()}
-        </div>
+        ${this.renderBoundaries()}
         <div class="bar">
           ${this.renderTimeslots()}
         </div>
@@ -197,17 +195,24 @@ export class SchedulerTimeslotEditor extends LitElement {
     // Rough estimate of a label's rendered width, used to detect when two
     // neighbouring labels would overlap so one of them can be raised to a
     // second tier instead of clashing.
-    const estimateLabelWidth = (label: string) => label.length * 6 + 6;
+    const estimateLabelWidth = (label: string) => label.length * 7 + 6;
 
-    const tierEdge = [-Infinity, -Infinity];
+    // Assign each boundary to the lowest tier where it doesn't overlap
+    // anything already placed there. Tiers are unbounded: a cluster of many
+    // close boundaries just keeps stacking upward. Since this is recomputed
+    // from scratch on every render, tiers free up again automatically once
+    // slots are resized apart.
+    const tierEdges: number[] = [];
     const tiers = boundaries.map(b => {
       const labelWidth = estimateLabelWidth(b.label);
       const startEdge = b.align === 'end' ? b.position - labelWidth : b.position - labelWidth / 2;
       const endEdge = b.align === 'start' ? b.position + labelWidth : b.position + labelWidth / 2;
-      const tier = startEdge > tierEdge[0] ? 0 : 1;
-      tierEdge[tier] = Math.max(tierEdge[tier], endEdge);
+      let tier = tierEdges.findIndex(edge => startEdge > edge);
+      if (tier === -1) tier = tierEdges.length;
+      tierEdges[tier] = endEdge;
       return tier;
     });
+    const maxTier = tiers.reduce((max, t) => Math.max(max, t), 0);
 
     // `inset-inline-start` mirrors correctly under RTL, but `translateX(-50%)`
     // is a physical transform: it always shifts left, so under RTL (where the
@@ -216,20 +221,32 @@ export class SchedulerTimeslotEditor extends LitElement {
     const isRtl = getComputedStyle(this).direction === 'rtl';
     const centerShift = isRtl ? '50%' : '-50%';
 
-    return boundaries.map((b, i) => html`
-      <div
-        class="boundary ${b.align} ${tiers[i] === 1 ? 'raised' : ''}"
-        style=${styleMap({
+    const baseLineHeight = 7;
+    const tierStep = 17;
+    const labelHeight = 15;
+    const containerHeight = labelHeight + baseLineHeight + maxTier * tierStep;
+
+    return html`
+      <div class="boundaries" style=${styleMap({ height: `${containerHeight}px` })}>
+        ${boundaries.map((b, i) => html`
+          <div
+            class="boundary ${b.align}"
+            style=${styleMap({
       ...(b.align === 'end'
         ? { insetInlineEnd: `${this._width - b.position}px` }
         : { insetInlineStart: `${b.position}px` }),
       ...(b.align === 'middle' ? { transform: `translateX(${centerShift})` } : {}),
     })}
-      >
-        <span class="boundary-label">${b.label}</span>
-        <span class="boundary-line"></span>
+          >
+            <span class="boundary-label">${b.label}</span>
+            <span
+              class="boundary-line"
+              style=${styleMap({ height: `${baseLineHeight + tiers[i] * tierStep}px` })}
+            ></span>
+          </div>
+        `)}
       </div>
-    `);
+    `;
   }
 
   computeSlotWidths() {
@@ -412,7 +429,7 @@ export class SchedulerTimeslotEditor extends LitElement {
       .boundaries {
         position: relative;
         width: 100%;
-        height: 34px;
+        transition: height 0.15s ease-in-out;
       }
       .boundary {
         position: absolute;
@@ -429,20 +446,18 @@ export class SchedulerTimeslotEditor extends LitElement {
         align-items: flex-end;
       }
       .boundary-label {
-        font-size: 0.7rem;
+        font-size: 0.8rem;
+        font-weight: 600;
         line-height: 1;
         white-space: nowrap;
-        color: var(--secondary-text-color);
+        color: var(--primary-text-color);
         margin-bottom: 3px;
       }
       .boundary-line {
         display: block;
         width: 1px;
-        height: 6px;
         background: var(--divider-color, rgba(127, 127, 127, 0.5));
-      }
-      .boundary.raised .boundary-line {
-        height: 20px;
+        transition: height 0.15s ease-in-out;
       }
       .bar {
         width: 100%;
