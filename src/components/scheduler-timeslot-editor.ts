@@ -67,6 +67,8 @@ export class SchedulerTimeslotEditor extends LitElement {
 
   private _suppressNextClick = false;
 
+  private _lastBarTap?: { time: number; x: number };
+
   @property({ type: Boolean })
   large = false;
 
@@ -317,6 +319,23 @@ export class SchedulerTimeslotEditor extends LitElement {
     const target = ev.target as HTMLElement;
     if (!target.closest('.slot')) return;
     if (this._pinch) return;
+
+    // On touch, a single-finger drag on the bar must PAN the (zoomed) view -
+    // otherwise there is no way to move sideways with one finger. Creating a
+    // slot by touch requires a double-tap-and-drag instead: tap once, then
+    // immediately touch again and drag. Mouse drags always create.
+    if (ev.pointerType === 'touch') {
+      const now = performance.now();
+      const isDoubleTap = this._lastBarTap !== undefined
+        && now - this._lastBarTap.time < 400
+        && Math.abs(ev.clientX - this._lastBarTap.x) < 50;
+      this._lastBarTap = { time: now, x: ev.clientX };
+      if (!isDoubleTap) {
+        this._startBarPan(ev);
+        return;
+      }
+    }
+
     this._createDrag = {
       startClientX: ev.clientX,
       ts0: this._clientXToTs(ev.clientX),
@@ -325,6 +344,12 @@ export class SchedulerTimeslotEditor extends LitElement {
 
     const moveHandler = (mv: PointerEvent) => {
       if (!this._createDrag) return;
+      if (this._pinch) {
+        // A second finger arrived: this became a pinch, not a carve.
+        this._createDrag = undefined;
+        this._createRange = undefined;
+        return;
+      }
       if (!this._createDrag.active && Math.abs(mv.clientX - this._createDrag.startClientX) < 5) return;
       this._createDrag.active = true;
       const ts = this._clientXToTs(mv.clientX);
@@ -347,6 +372,32 @@ export class SchedulerTimeslotEditor extends LitElement {
       const stepSec = this._dragStepSize * 60;
       if (range.ts1 - range.ts0 < stepSec) return;
       this._commitCreate(range.ts0, range.ts1);
+    };
+    window.addEventListener('pointermove', moveHandler);
+    window.addEventListener('pointerup', upHandler);
+    window.addEventListener('pointercancel', upHandler);
+  }
+
+  // Single-finger pan on the bar itself (touch only).
+  private _startBarPan(ev: PointerEvent) {
+    const startX = ev.clientX;
+    const startPanPx = this._panPx;
+    let moved = false;
+
+    const moveHandler = (mv: PointerEvent) => {
+      if (this._pinch) return; // second finger: pinch handler owns the view
+      const dx = mv.clientX - startX;
+      if (!moved && Math.abs(dx) < 5) return;
+      moved = true;
+      this._panPx = this._clampPan(startPanPx - dx, this._zoom);
+    };
+    const upHandler = () => {
+      window.removeEventListener('pointermove', moveHandler);
+      window.removeEventListener('pointerup', upHandler);
+      window.removeEventListener('pointercancel', upHandler);
+      // A pan drag must not toggle slot selection on release; a motionless
+      // tap still selects as usual.
+      if (moved) this._suppressNextClick = true;
     };
     window.addEventListener('pointermove', moveHandler);
     window.addEventListener('pointerup', upHandler);
@@ -1049,15 +1100,13 @@ export class SchedulerTimeslotEditor extends LitElement {
       }
       .slot.empty {
         background: rgba(var(--rgb-secondary-text-color), 0.5);
+        border: 2px solid rgb(156, 39, 176);
       }
       .slot.empty:hover {
         background: rgba(var(--rgb-secondary-text-color), 0.65);
       }
       .slot.empty.selected {
-        border: 3px solid rgba(var(--rgb-secondary-text-color), 0.65);
-      }
-      .slot.empty.selected:hover {
-        border: 3px solid rgba(var(--rgb-secondary-text-color), 1);
+        border: 3px solid rgb(156, 39, 176);
       }
       .slot .marker {
         width: 24px;
