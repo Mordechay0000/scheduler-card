@@ -9,6 +9,7 @@ import { timeToString } from '../data/time/time_to_string';
 import { computeActionIcon } from '../data/format/compute_action_icon';
 import { formatActionDisplay } from '../data/format/format_action_display';
 import { isOffAction, isOnAction } from '../data/format/is_off_action';
+import { computeActionColor } from '../data/format/compute_action_color';
 import { parseTimeString } from '../data/time/parse_time_string';
 import { computeTimestamp } from '../data/time/compute_timestamp';
 import { HomeAssistant } from '../lib/types';
@@ -512,7 +513,9 @@ export class SchedulerTimeslotEditor extends LitElement {
 
     const amPm = useAmPm(this.hass.locale);
 
-    const segmentWidth = amPm ? 130 : 100;
+    // Width one label needs to render without touching its neighbours;
+    // kept tight so the ruler shows every hour whenever it fits.
+    const segmentWidth = amPm ? 88 : 56;
     if (!fullWidth) return html``;
     let stepSize = Math.ceil(24 / (fullWidth / segmentWidth));
     while (!allowedStepSizes.includes(stepSize)) stepSize++;
@@ -556,10 +559,21 @@ export class SchedulerTimeslotEditor extends LitElement {
         ? isOffAction(slot.actions[0]) ? 'off' : isOnAction(slot.actions[0]) ? 'on' : ''
         : '';
 
+      // Brightness/color-temp settings tint the slot: opacity follows
+      // brightness, hue follows color temperature (live, since this is
+      // recomputed on every schedule update).
+      const customColor = slot.actions.length ? computeActionColor(slot.actions[0]) : null;
+      const colorStyles = customColor
+        ? {
+          background: `rgba(${customColor.rgb.join(', ')}, ${customColor.alpha})`,
+          ...(this.selectedSlot == i ? { borderColor: `rgb(${customColor.rgb.join(', ')})` } : {}),
+        }
+        : {};
+
       return html`
         <div
           class="slot ${this.selectedSlot == i ? 'selected' : ''} ${slot.actions.length ? actionState : 'empty'} ${slot.stop === undefined ? 'short' : ''} ${this.pendingSlot === i ? 'pending' : ''}"
-          style="${styleMap({ width: `${slotWidths[i]}px` })}"
+          style="${styleMap({ width: `${slotWidths[i]}px`, ...colorStyles })}"
           @click=${this._toggleSelectTimeslot}
           idx="${i}"
         >
@@ -631,7 +645,14 @@ export class SchedulerTimeslotEditor extends LitElement {
       return '';
     };
 
-    type Boundary = { position: number; label: string; align: 'start' | 'middle' | 'end'; state: string };
+    // Brightness/color-temp-tinted slots carry their exact color onto
+    // their start label too.
+    const slotColor = (slot: Timeslot): string | undefined => {
+      const color = slot.actions.length ? computeActionColor(slot.actions[0]) : null;
+      return color ? `rgba(${color.rgb.join(', ')}, ${color.alpha})` : undefined;
+    };
+
+    type Boundary = { position: number; label: string; align: 'start' | 'middle' | 'end'; state: string; color?: string };
     const boundaries: Boundary[] = [];
 
     let cursor = 0; // leading edge of the current slot's own box
@@ -642,6 +663,7 @@ export class SchedulerTimeslotEditor extends LitElement {
           label: timeToString(parseTimeString(slot.start), { seconds: false, am_pm: amPm }),
           align: 'start',
           state: slotState(slot),
+          color: slotColor(slot),
         });
       }
 
@@ -656,6 +678,7 @@ export class SchedulerTimeslotEditor extends LitElement {
           label: timeToString(parseTimeString(slot.stop), { seconds: false, am_pm: amPm }),
           align: isLast ? 'end' : 'middle',
           state: isLast ? slotState(slot) : slotState(slots[i + 1]),
+          color: isLast ? slotColor(slot) : slotColor(slots[i + 1]),
         });
       }
 
@@ -708,7 +731,7 @@ export class SchedulerTimeslotEditor extends LitElement {
       ...(b.align === 'middle' ? { transform: `translateX(${centerShift})` } : {}),
     })}
           >
-            <span class="boundary-label ${b.state}">${b.label}</span>
+            <span class="boundary-label ${b.state}" style=${styleMap(b.color ? { color: b.color } : {})}>${b.label}</span>
             <span
               class="boundary-line"
               style=${styleMap({ height: `${baseLineHeight + tiers[i] * tierStep}px` })}
