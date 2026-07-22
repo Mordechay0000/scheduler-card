@@ -21,7 +21,9 @@ import { isDefined } from "./lib/is_defined";
 import './scheduler-card-editor';
 import "./dialogs/dialog-scheduler-editor";
 import "./components/scheduler-item-row";
+import "./components/scheduler-overview-row";
 import { entityIncludedByConfig } from "./data/actions/entity_included_by_config";
+import { mdiViewDayOutline, mdiViewSequentialOutline } from "@mdi/js";
 
 @customElement('scheduler-card')
 export class SchedulerCard extends LitElement {
@@ -33,6 +35,8 @@ export class SchedulerCard extends LitElement {
   @state() public schedules?: ScheduleStorageEntry[];
 
   @state() showDiscovered: boolean = false;
+
+  @state() overviewMode: boolean = false;
 
   translationsLoaded = false;
   connectionError = false;
@@ -158,6 +162,17 @@ export class SchedulerCard extends LitElement {
       }
           </div>
 
+          <div class="header-actions">
+          ${Object.keys(this.schedules || {}).length ? html`
+          <ha-icon-button
+            .path=${this.overviewMode ? mdiViewSequentialOutline : mdiViewDayOutline}
+            .label=${this.overviewMode
+        ? localize('ui.panel.overview.list_view', this.hass)
+        : localize('ui.panel.overview.overview_view', this.hass)}
+            @click=${() => { this.overviewMode = !this.overviewMode; }}
+          >
+          </ha-icon-button>
+          ` : ''}
           ${Object.keys(this.schedules || {}).length && this._config.show_header_toggle
         ? html`
           <ha-switch
@@ -167,6 +182,7 @@ export class SchedulerCard extends LitElement {
           </ha-switch>
           `
         : ''}
+          </div>
         </div>
 
         <div class="card-content" id="states">
@@ -187,17 +203,7 @@ export class SchedulerCard extends LitElement {
           ${localize('ui.panel.overview.no_entries', this.hass)}
         </div>
         `
-          : includedItems.map(scheduleItem => html`
-            <scheduler-item-row
-              .hass=${this.hass}
-              .config=${this._config}
-              .schedule_id=${scheduleItem.schedule_id}
-              .schedule=${scheduleItem}
-              @editClick=${(ev: Event) => { this._handleEditClick(ev, scheduleItem) }}
-            >
-            </scheduler-item-row>
-          `
-          )
+          : includedItems.map(scheduleItem => this._renderRow(scheduleItem))
       }
 
       ${Object.keys(items).length > includedItems.length && this._config.discover_existing !== false
@@ -217,18 +223,7 @@ export class SchedulerCard extends LitElement {
             `
           : html`
 
-          ${excludedItems.map(scheduleItem => html`
-                <scheduler-item-row
-                  .hass=${this.hass}
-                  .config=${this._config}
-                  .schedule_id=${scheduleItem.schedule_id}
-                  .schedule=${scheduleItem}
-              @editClick=${(ev: Event) => { this._handleEditClick(ev, scheduleItem) }}
-                >
-                </scheduler-item-row>
-              `
-          )
-            }
+          ${excludedItems.map(scheduleItem => this._renderRow(scheduleItem))}
 
               <div>
                 <ha-button
@@ -330,6 +325,30 @@ export class SchedulerCard extends LitElement {
     });
   }
 
+  private _renderRow(scheduleItem: ScheduleStorageEntry) {
+    return this.overviewMode
+      ? html`
+        <scheduler-overview-row
+          .hass=${this.hass}
+          .config=${this._config}
+          .schedule_id=${scheduleItem.schedule_id}
+          .schedule=${scheduleItem}
+          @editClick=${(ev: Event) => { this._handleEditClick(ev, scheduleItem) }}
+        >
+        </scheduler-overview-row>
+      `
+      : html`
+        <scheduler-item-row
+          .hass=${this.hass}
+          .config=${this._config}
+          .schedule_id=${scheduleItem.schedule_id}
+          .schedule=${scheduleItem}
+          @editClick=${(ev: Event) => { this._handleEditClick(ev, scheduleItem) }}
+        >
+        </scheduler-item-row>
+      `;
+  }
+
   private _handleEditClick(ev: Event, item: Schedule) {
     if (!this.schedules) return;
 
@@ -388,6 +407,10 @@ export class SchedulerCard extends LitElement {
       overflow: hidden;
       text-overflow: ellipsis;
       display: flex;
+    }
+    .card-header .header-actions {
+      display: flex;
+      align-items: center;
     }
     .card-header ha-switch {
       display: flex;
