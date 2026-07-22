@@ -12,6 +12,8 @@ import { formatActionDisplay } from '../data/format/format_action_display';
 import { isOffAction, isOnAction, invertOnOffAction } from '../data/format/is_off_action';
 import { computeActionColor } from '../data/format/compute_action_color';
 import { computeHourTicks } from '../data/format/compute_hour_ticks';
+import { computeSlotWidths as computeSlotWidths_ } from '../data/time/compute_slot_widths';
+import { computeSlotBoundaries } from '../data/format/compute_slot_boundaries';
 import { parseTimeString } from '../data/time/parse_time_string';
 import { computeTimestamp } from '../data/time/compute_timestamp';
 import { HomeAssistant } from '../lib/types';
@@ -636,79 +638,7 @@ export class SchedulerTimeslotEditor extends LitElement {
     const slotWidths = this.computeSlotWidths();
     const amPm = useAmPm(this.hass.locale);
 
-    // Each boundary label is tinted like the slot that STARTS at it, so the
-    // time reads as "this is when that color takes effect". The final
-    // (end-of-day) boundary has no starting slot and takes the ending
-    // slot's color instead.
-    const slotState = (slot: Timeslot): string => {
-      if (this.pendingSlot !== null && slots[this.pendingSlot] === slot) return 'pending';
-      if (!slot.actions.length) return 'empty';
-      if (isOffAction(slot.actions[0])) return 'off';
-      if (isOnAction(slot.actions[0])) return 'on';
-      return '';
-    };
-
-    // Brightness/color-temp-tinted slots carry their exact color onto
-    // their start label too.
-    const slotColor = (slot: Timeslot): string | undefined => {
-      const color = slot.actions.length ? computeActionColor(slot.actions[0]) : null;
-      return color ? `rgba(${color.rgb.join(', ')}, ${color.alpha})` : undefined;
-    };
-
-    type Boundary = { position: number; label: string; align: 'start' | 'middle' | 'end'; state: string; color?: string };
-    const boundaries: Boundary[] = [];
-
-    let cursor = 0; // leading edge of the current slot's own box
-    slots.forEach((slot, i) => {
-      if (i === 0) {
-        boundaries.push({
-          position: cursor,
-          label: timeToString(parseTimeString(slot.start), { seconds: false, am_pm: amPm }),
-          align: 'start',
-          state: slotState(slot),
-          color: slotColor(slot),
-        });
-      }
-
-      const boxEnd = cursor + slotWidths[i];
-      const isLast = i === slots.length - 1;
-
-      // A slot without a stop visually merges into the next one, so its
-      // boundary is not a real time and should not get a marker.
-      if (slot.stop !== undefined) {
-        boundaries.push({
-          position: boxEnd,
-          label: timeToString(parseTimeString(slot.stop), { seconds: false, am_pm: amPm }),
-          align: isLast ? 'end' : 'middle',
-          state: isLast ? slotState(slot) : slotState(slots[i + 1]),
-          color: isLast ? slotColor(slot) : slotColor(slots[i + 1]),
-        });
-      }
-
-      cursor = boxEnd + (isLast ? 0 : 3);
-    });
-
-    // Rough estimate of a label's rendered width, used to detect when two
-    // neighbouring labels would overlap so one of them can be raised to a
-    // second tier instead of clashing.
-    const estimateLabelWidth = (label: string) => label.length * 7 + 6;
-
-    // Assign each boundary to the lowest tier where it doesn't overlap
-    // anything already placed there. Tiers are unbounded: a cluster of many
-    // close boundaries just keeps stacking upward. Since this is recomputed
-    // from scratch on every render, tiers free up again automatically once
-    // slots are resized apart.
-    const tierEdges: number[] = [];
-    const tiers = boundaries.map(b => {
-      const labelWidth = estimateLabelWidth(b.label);
-      const startEdge = b.align === 'end' ? b.position - labelWidth : b.position - labelWidth / 2;
-      const endEdge = b.align === 'start' ? b.position + labelWidth : b.position + labelWidth / 2;
-      let tier = tierEdges.findIndex(edge => startEdge > edge);
-      if (tier === -1) tier = tierEdges.length;
-      tierEdges[tier] = endEdge;
-      return tier;
-    });
-    const maxTier = tiers.reduce((max, t) => Math.max(max, t), 0);
+    const { boundaries, maxTier } = computeSlotBoundaries(slots, slotWidths, amPm, 3, this.pendingSlot);
 
     // `inset-inline-start` mirrors correctly under RTL, but `translateX(-50%)`
     // is a physical transform: it always shifts left, so under RTL (where the
@@ -724,7 +654,7 @@ export class SchedulerTimeslotEditor extends LitElement {
 
     return html`
       <div class="boundaries" style=${styleMap({ height: `${containerHeight}px` })}>
-        ${boundaries.map((b, i) => html`
+        ${boundaries.map(b => html`
           <div
             class="boundary ${b.align}"
             style=${styleMap({
@@ -737,7 +667,7 @@ export class SchedulerTimeslotEditor extends LitElement {
             <span class="boundary-label ${b.state}" style=${styleMap(b.color ? { color: b.color } : {})}>${b.label}</span>
             <span
               class="boundary-line"
-              style=${styleMap({ height: `${baseLineHeight + tiers[i] * tierStep}px` })}
+              style=${styleMap({ height: `${baseLineHeight + b.tier * tierStep}px` })}
             ></span>
           </div>
         `)}
@@ -746,39 +676,7 @@ export class SchedulerTimeslotEditor extends LitElement {
   }
 
   computeSlotWidths() {
-    const fullWidth = this._contentWidth;
-
-    const slots = this.schedule!.slots;
-
-    const totalWidth = fullWidth - (slots.length - 1) * 3;
-
-    const widthPct = slots.map((e, i) => {
-      const ts_start = computeTimestamp(e.start, this.hass);
-      let ts_stop: number;
-      if (e.stop !== undefined) {
-        ts_stop = computeTimestamp(e.stop, this.hass);
-        if (!ts_stop && ts_start) ts_stop = SEC_PER_DAY;
-      } else {
-        // Slot without a stop time: visually span to the next slot's start
-        const nextSlot = slots[i + 1];
-        ts_stop = nextSlot
-          ? (computeTimestamp(nextSlot.start, this.hass) || SEC_PER_DAY)
-          : SEC_PER_DAY;
-      }
-      return (ts_stop - ts_start) / SEC_PER_DAY;
-    });
-
-    const minWidth = 5;
-    const minPct = minWidth / totalWidth;
-    const smallSlotCount = widthPct.filter(e => e < minPct).length;
-    const availableWidth = totalWidth - smallSlotCount * minWidth;
-
-    const slotWidths = widthPct.map(e => {
-      if (e < minPct) return minWidth;
-      return e * availableWidth;
-    });
-
-    return slotWidths;
+    return computeSlotWidths_(this.schedule!.slots, this.hass, this._contentWidth);
   }
 
   _toggleSelectTimeslot(ev: Event) {
