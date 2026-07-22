@@ -3,6 +3,7 @@ import { property, customElement, state } from 'lit/decorators.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import { CardConfig, ScheduleEntry, Time, TimeMode, Timeslot } from '../types';
 import { carveTimeslot } from '../data/schedule/carve_timeslot';
+import { mergeEqualAdjacentSlots } from '../data/schedule/merge_equal_slots';
 import { mdiUnfoldMoreVertical } from '@mdi/js';
 import { roundTime } from '../data/time/round_time';
 import { timeToString } from '../data/time/time_to_string';
@@ -125,7 +126,7 @@ export class SchedulerTimeslotEditor extends LitElement {
     // panel's trash-button behaviour (remove_timeslot.ts).
     const slotIdx = this.selectedSlot;
     const cutIndex = slotIdx === slots.length - 1 ? slotIdx - 1 : slotIdx;
-    const newSlots = [
+    let newSlots = [
       ...slots.slice(0, cutIndex),
       {
         ...slots[cutIndex + 1],
@@ -134,6 +135,10 @@ export class SchedulerTimeslotEditor extends LitElement {
       },
       ...slots.slice(cutIndex + 2),
     ];
+    // If that merge left the slot with the exact same effect as its OWN
+    // neighbour (e.g. deleting the middle of on/dim/on collapses into one
+    // "on"), fold those together too.
+    newSlots = mergeEqualAdjacentSlots(newSlots);
 
     this.schedule = { ...this.schedule, slots: newSlots };
     this.selectedSlot = null;
