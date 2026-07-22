@@ -22,6 +22,7 @@ import './scheduler-card-editor';
 import "./dialogs/dialog-scheduler-editor";
 import "./components/scheduler-item-row";
 import "./components/scheduler-overview-row";
+import "./components/scheduler-overview-ruler";
 import { entityIncludedByConfig } from "./data/actions/entity_included_by_config";
 import { mdiViewDayOutline, mdiViewSequentialOutline } from "@mdi/js";
 
@@ -187,6 +188,9 @@ export class SchedulerCard extends LitElement {
 
         <div class="card-content" id="states">
 
+    ${this.overviewMode && !this.connectionError && Object.keys(includedItems).length
+        ? html`<scheduler-overview-ruler .hass=${this.hass}></scheduler-overview-ruler>`
+        : ''}
     ${this.connectionError
         ? html`
         <div>

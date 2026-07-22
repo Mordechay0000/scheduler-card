@@ -11,6 +11,7 @@ import { computeActionIcon } from '../data/format/compute_action_icon';
 import { formatActionDisplay } from '../data/format/format_action_display';
 import { isOffAction, isOnAction, invertOnOffAction } from '../data/format/is_off_action';
 import { computeActionColor } from '../data/format/compute_action_color';
+import { computeHourTicks } from '../data/format/compute_hour_ticks';
 import { parseTimeString } from '../data/time/parse_time_string';
 import { computeTimestamp } from '../data/time/compute_timestamp';
 import { HomeAssistant } from '../lib/types';
@@ -526,36 +527,15 @@ export class SchedulerTimeslotEditor extends LitElement {
   }
 
   renderTimebar() {
-    const fullWidth = this._contentWidth;
-    const allowedStepSizes = [1, 2, 3, 4, 6, 8, 12];
-
     const amPm = useAmPm(this.hass.locale);
+    const ticks = computeHourTicks(this._contentWidth, amPm);
 
-    // Width one label needs to render without touching its neighbours;
-    // kept tight so the ruler shows every hour whenever it fits.
-    const segmentWidth = amPm ? 88 : 56;
-    if (!fullWidth) return html``;
-    let stepSize = Math.ceil(24 / (fullWidth / segmentWidth));
-    while (!allowedStepSizes.includes(stepSize)) stepSize++;
-
-    const nums = [0, ...Array.from(Array(24 / stepSize - 1).keys()).map(e => (e + 1) * stepSize), 24];
-
-    return nums.map((e, i) => {
-      let w = (stepSize / 24) * 100;
-      w = Math.floor(w * 100) / 100;
-
-      let time: Time = { mode: TimeMode.Fixed, hours: e, minutes: 0 };
-      //if (e == 24) time = { ...time, hours: 23, minutes: 59 };
-
-      if (i == 0) return html`
-        <span class="left" style=${styleMap({ width: `${w / 2}%` })}>${timeToString(time, { seconds: false, am_pm: amPm })}</span>
-      `
-
-      else if (i == (nums.length - 1)) return html`
-        <span class="right" style=${styleMap({ width: `${w / 2}%` })}>${timeToString(time, { seconds: false, am_pm: amPm })}</span>
-      `
-      else return html`
-        <span style=${styleMap({ width: `${w}%` })}>${timeToString(time, { seconds: false, am_pm: amPm })}</span>
+    return ticks.map(tick => {
+      const time: Time = { mode: TimeMode.Fixed, hours: tick.hour, minutes: 0 };
+      const label = timeToString(time, { seconds: false, am_pm: amPm });
+      const cls = tick.align === 'left' ? 'left' : tick.align === 'right' ? 'right' : '';
+      return html`
+        <span class="${cls}" style=${styleMap({ width: `${tick.widthPct}%` })}>${label}</span>
       `;
     });
   }
