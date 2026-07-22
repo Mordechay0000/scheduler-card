@@ -8,7 +8,7 @@ import { roundTime } from '../data/time/round_time';
 import { timeToString } from '../data/time/time_to_string';
 import { computeActionIcon } from '../data/format/compute_action_icon';
 import { formatActionDisplay } from '../data/format/format_action_display';
-import { isOffAction, isOnAction } from '../data/format/is_off_action';
+import { isOffAction, isOnAction, invertOnOffAction } from '../data/format/is_off_action';
 import { computeActionColor } from '../data/format/compute_action_color';
 import { parseTimeString } from '../data/time/parse_time_string';
 import { computeTimestamp } from '../data/time/compute_timestamp';
@@ -407,12 +407,25 @@ export class SchedulerTimeslotEditor extends LitElement {
 
   private _commitCreate(ts0: number, ts1: number) {
     const oldSlots = [...this.schedule!.slots];
-    const [slots, newIdx] = carveTimeslot(oldSlots, ts0, ts1, this.hass);
+    let [slots, newIdx] = carveTimeslot(oldSlots, ts0, ts1, this.hass);
 
-    // Nested carve while a previous pending slot is still empty: revert to
-    // the original layout first so a stray drag can't stack empty slots.
-    this._slotsBackup = this.pendingSlot !== null && this._slotsBackup ? this._slotsBackup : oldSlots;
-    this.pendingSlot = newIdx;
+    // Default the new slot to the OPPOSITE of its neighbour's on/off action
+    // (still changeable afterwards). Slots that get a default this way are
+    // immediately valid, so the revert-on-blur safety net only applies when
+    // no default could be derived.
+    const reference = [slots[newIdx - 1], slots[newIdx + 1]]
+      .find(s => s?.actions?.length && invertOnOffAction(s.actions[0]) !== null);
+    const defaultAction = reference ? invertOnOffAction(reference.actions[0]) : null;
+    if (defaultAction) {
+      slots = Object.assign([...slots], { [newIdx]: { ...slots[newIdx], actions: [defaultAction] } });
+      this.pendingSlot = null;
+      this._slotsBackup = undefined;
+    } else {
+      // Nested carve while a previous pending slot is still empty: revert to
+      // the original layout first so a stray drag can't stack empty slots.
+      this._slotsBackup = this.pendingSlot !== null && this._slotsBackup ? this._slotsBackup : oldSlots;
+      this.pendingSlot = newIdx;
+    }
     this.selectedSlot = newIdx;
 
     this.schedule = { ...this.schedule!, slots: slots };
@@ -562,11 +575,16 @@ export class SchedulerTimeslotEditor extends LitElement {
       // Brightness/color-temp settings tint the slot: opacity follows
       // brightness, hue follows color temperature (live, since this is
       // recomputed on every schedule update).
+      // The frame stays the default "on" green even when the fill is tinted,
+      // so a slot dimmed to near-transparent or tinted to white still reads
+      // as a configured slot rather than an empty one.
       const customColor = slot.actions.length ? computeActionColor(slot.actions[0]) : null;
       const colorStyles = customColor
         ? {
           background: `rgba(${customColor.rgb.join(', ')}, ${customColor.alpha})`,
-          ...(this.selectedSlot == i ? { borderColor: `rgb(${customColor.rgb.join(', ')})` } : {}),
+          border: this.selectedSlot == i
+            ? `3px solid rgb(var(--rgb-state-active-color, 67, 160, 71))`
+            : `2px solid rgba(var(--rgb-state-active-color, 67, 160, 71), 0.9)`,
         }
         : {};
 
