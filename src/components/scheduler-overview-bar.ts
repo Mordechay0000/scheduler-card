@@ -19,6 +19,10 @@ const SEC_PER_DAY = 24 * 3600;
 const GAP_PX = 2;
 const MINUTE_DRAG_ZOOM_THRESHOLD = 4;
 
+// A slot selection anywhere clears every other bar's selection: each bar
+// broadcasts on select and listens for everyone else's broadcasts.
+const SELECT_EVENT = 'scheduler-overview-slot-select';
+
 /**
  * A compact rendering of a slot list: same color language AND start/end
  * time markers as the full timeslot editor, sharing the card-wide
@@ -49,12 +53,74 @@ export class SchedulerOverviewBar extends LitElement {
     return this.viewportWidth * this.zoom;
   }
 
+  private _pinch?: { distance: number; midpointX: number };
+
+  private _onExternalSelect = (ev: Event) => {
+    if ((ev as CustomEvent).detail?.source !== this) this.selectedSlot = null;
+  };
+
+  connectedCallback() {
+    super.connectedCallback();
+    document.addEventListener(SELECT_EVENT, this._onExternalSelect);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    document.removeEventListener(SELECT_EVENT, this._onExternalSelect);
+  }
+
   updated(changed: Map<string, unknown>) {
     if (changed.has('slots')) this._liveSlots = undefined;
     // Restore the true reading direction on the content (the .viewport
     // around it is forced ltr for the zoom/pan anchor math).
     const inner = this.shadowRoot?.querySelector('.content-inner') as HTMLElement | null;
     if (inner) inner.style.direction = getComputedStyle(this).direction;
+  }
+
+  private _handleWheel(ev: WheelEvent) {
+    if (!this.viewportWidth) return;
+    const isZoomGesture = ev.ctrlKey || ev.metaKey || Math.abs(ev.deltaY) >= Math.abs(ev.deltaX);
+    ev.preventDefault();
+    const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+    const anchorPx = ev.clientX - rect.left;
+
+    if (isZoomGesture) {
+      // More sensitive than a typical wheel-zoom map so it doesn't take a
+      // lot of scrolling to get anywhere.
+      const factor = Math.pow(2, -ev.deltaY / 120);
+      this.dispatchEvent(new CustomEvent('overview-zoom', { detail: { anchorPx, factor }, bubbles: true, composed: true }));
+    } else {
+      this.dispatchEvent(new CustomEvent('overview-pan', { detail: { deltaPx: ev.deltaX }, bubbles: true, composed: true }));
+    }
+  }
+
+  private _touchDistance(t: TouchList) {
+    const dx = t[0].clientX - t[1].clientX;
+    const dy = t[0].clientY - t[1].clientY;
+    return Math.hypot(dx, dy);
+  }
+
+  private _handlePinchStart(ev: TouchEvent) {
+    if (ev.touches.length !== 2) return;
+    ev.preventDefault();
+    const rect = this.getBoundingClientRect();
+    this._pinch = {
+      distance: this._touchDistance(ev.touches),
+      midpointX: (ev.touches[0].clientX + ev.touches[1].clientX) / 2 - rect.left,
+    };
+  }
+
+  private _handlePinchMove(ev: TouchEvent) {
+    if (!this._pinch || ev.touches.length !== 2) return;
+    ev.preventDefault();
+    const distance = this._touchDistance(ev.touches);
+    const scale = distance / this._pinch.distance;
+    this.dispatchEvent(new CustomEvent('overview-zoom', { detail: { anchorPx: this._pinch.midpointX, factor: scale }, bubbles: true, composed: true }));
+    this._pinch.distance = distance;
+  }
+
+  private _handlePinchEnd(ev: TouchEvent) {
+    if (ev.touches.length < 2) this._pinch = undefined;
   }
 
   render() {
@@ -74,7 +140,14 @@ export class SchedulerOverviewBar extends LitElement {
     const boundariesHeight = labelHeight + baseLineHeight + maxTier * tierStep;
 
     return html`
-      <div class="viewport">
+      <div
+        class="viewport"
+        @wheel=${this._handleWheel}
+        @touchstart=${this._handlePinchStart}
+        @touchmove=${this._handlePinchMove}
+        @touchend=${this._handlePinchEnd}
+        @touchcancel=${this._handlePinchEnd}
+      >
         <div
           class="zoom-content"
           style=${styleMap({ width: `${this._contentWidth}px`, transform: `translateX(${-this.panPx}px)` })}
@@ -133,6 +206,9 @@ export class SchedulerOverviewBar extends LitElement {
   private _selectSlot(ev: Event, i: number) {
     ev.stopPropagation();
     this.selectedSlot = this.selectedSlot === i ? null : i;
+    if (this.selectedSlot !== null) {
+      document.dispatchEvent(new CustomEvent(SELECT_EVENT, { detail: { source: this } }));
+    }
   }
 
   private get _dragStepSize() {
@@ -215,6 +291,7 @@ export class SchedulerOverviewBar extends LitElement {
         width: 100%;
         overflow: hidden;
         position: relative;
+        touch-action: none;
         /* A block wider than its container overflow-anchors based on its
            PARENT's direction, not its own - force ltr here for a fixed,
            direction-independent anchor for the pan/zoom math, then restore
@@ -302,14 +379,15 @@ export class SchedulerOverviewBar extends LitElement {
       }
       .handle {
         display: flex;
-        width: 22px;
+        width: 14px;
         height: 100%;
         align-items: center;
         justify-content: center;
-        margin-inline-start: -11px;
-        margin-inline-end: -11px;
+        margin-inline-start: -7px;
+        margin-inline-end: -7px;
         visibility: visible;
         z-index: 4;
+        cursor: ew-resize;
       }
       .handle.hidden {
         visibility: hidden;
@@ -317,19 +395,19 @@ export class SchedulerOverviewBar extends LitElement {
       .handle span {
         background: var(--card-background-color);
         border-radius: 50%;
-        width: 16px;
-        height: 16px;
+        width: 10px;
+        height: 10px;
         display: flex;
         z-index: 5;
       }
       .handle ha-icon-button {
-        --mdc-icon-button-size: 22px;
-        --mdc-icon-size: 14px;
-        margin-top: -3px;
-        margin-inline-start: -3px;
+        --mdc-icon-button-size: 14px;
+        --mdc-icon-size: 9px;
+        margin-top: -2px;
+        margin-inline-start: -2px;
       }
       .handle.center span {
-        margin-inline-end: -2px;
+        margin-inline-end: -1px;
       }
     `;
   }

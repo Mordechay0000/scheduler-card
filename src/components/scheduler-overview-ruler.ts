@@ -21,6 +21,7 @@ export const OVERVIEW_SPACER_WIDTH = 158;
 @customElement('scheduler-overview-ruler')
 export class SchedulerOverviewRuler extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
+  @property({ attribute: false }) public now?: Date;
   @property({ type: Number }) public zoom = 1;
   @property({ type: Number }) public panPx = 0;
   @property({ type: Number }) public minZoom = 1;
@@ -76,7 +77,9 @@ export class SchedulerOverviewRuler extends LitElement {
     const anchorPx = ev.clientX - rect.left;
 
     if (isZoomGesture) {
-      const factor = Math.pow(2, -ev.deltaY / 300);
+      // More sensitive than a typical wheel-zoom map so it doesn't take a
+      // lot of scrolling to get anywhere.
+      const factor = Math.pow(2, -ev.deltaY / 120);
       this._fireZoom({ anchorPx, factor });
     } else {
       this.dispatchEvent(new CustomEvent('overview-pan', { detail: { deltaPx: ev.deltaX }, bubbles: true, composed: true }));
@@ -134,19 +137,25 @@ export class SchedulerOverviewRuler extends LitElement {
     const amPm = useAmPm(this.hass.locale);
     const ticks = computeHourTicks(this._contentWidth, amPm);
     const zoomPct = Math.round(this.zoom * 100);
+    // Highlight whichever tick is closest to the current time (e.g. 13:20
+    // highlights the 14:00 tick), so the ruler doubles as a "where are we
+    // now" reference.
+    const nearestHour = this.now !== undefined
+      ? Math.round(this.now.getHours() + this.now.getMinutes() / 60) % 24
+      : null;
 
     return html`
       <div class="zoom-controls">
         <ha-icon-button
           .disabled=${this.zoom <= this.minZoom}
-          @click=${() => this._fireZoom({ anchorPx: this._width / 2, factor: 1 / 1.6, animate: true })}
+          @click=${() => this._fireZoom({ anchorPx: this._width / 2, factor: 1 / 2.2, animate: true })}
         >
           <ha-icon icon="mdi:magnify-minus-outline"></ha-icon>
         </ha-icon-button>
         <span class="zoom-level" @click=${this._fireReset}>${zoomPct}%</span>
         <ha-icon-button
           .disabled=${this.zoom >= this.maxZoom}
-          @click=${() => this._fireZoom({ anchorPx: this._width / 2, factor: 1.6, animate: true })}
+          @click=${() => this._fireZoom({ anchorPx: this._width / 2, factor: 2.2, animate: true })}
         >
           <ha-icon icon="mdi:magnify-plus-outline"></ha-icon>
         </ha-icon-button>
@@ -173,8 +182,9 @@ export class SchedulerOverviewRuler extends LitElement {
       const time: Time = { mode: TimeMode.Fixed, hours: tick.hour, minutes: 0 };
       const label = timeToString(time, { seconds: false, am_pm: amPm });
       const cls = tick.align === 'left' ? 'left' : tick.align === 'right' ? 'right' : '';
+      const isNow = tick.hour === nearestHour || (tick.hour === 0 && nearestHour === 24);
       return html`
-                <span class="${cls}" style=${styleMap({ width: `${tick.widthPct}%` })}>${label}</span>
+                <span class="${cls} ${isNow ? 'now' : ''}" style=${styleMap({ width: `${tick.widthPct}%` })}>${label}</span>
               `;
     })}
           </div>
@@ -239,6 +249,10 @@ export class SchedulerOverviewRuler extends LitElement {
       }
       .ruler span.right {
         justify-content: flex-end;
+      }
+      .ruler span.now {
+        font-weight: 700;
+        color: var(--primary-color);
       }
     `;
   }

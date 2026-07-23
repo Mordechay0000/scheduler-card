@@ -130,7 +130,10 @@
         "hide_excluded": "hide excluded items",
         "additional_tasks": "{number} more {if number is 1} task {else} tasks",
         "overview_view": "Show timeline overview",
-        "list_view": "Show list view"
+        "list_view": "Show list view",
+        "tap_icon_to_toggle": "Tap to turn on/off",
+        "saved": "Saved",
+        "undo": "Undo"
       },
       "editor": {
         "repeated_days": "Repeated days",

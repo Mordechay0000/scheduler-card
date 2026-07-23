@@ -74,6 +74,24 @@ export class SchedulerTimeslotEditor extends LitElement {
 
   private _lastBarTap?: { time: number; x: number };
 
+  // Single-branch undo history for Ctrl/Cmd+Z: a snapshot pushed right
+  // before each committing mutation (drag release, delete, carve).
+  private _undoStack: Timeslot[][] = [];
+
+  private _pushUndo() {
+    if (this.schedule) this._undoStack.push(this.schedule.slots);
+    if (this._undoStack.length > 50) this._undoStack.shift();
+  }
+
+  private _undo() {
+    const previous = this._undoStack.pop();
+    if (!previous || !this.schedule) return;
+    this.schedule = { ...this.schedule, slots: previous };
+    this.pendingSlot = null;
+    this._slotsBackup = undefined;
+    this.dispatchEvent(new CustomEvent('update', { detail: { slots: previous } }));
+  }
+
   @property({ type: Boolean })
   large = false;
 
@@ -104,13 +122,21 @@ export class SchedulerTimeslotEditor extends LitElement {
   }
 
   private _handleKeyDown = (ev: KeyboardEvent) => {
+    const origin = ev.composedPath()[0];
+    const inInput = origin instanceof HTMLElement
+      && (['input', 'textarea', 'select'].includes(origin.tagName.toLowerCase()) || origin.isContentEditable);
+
+    if (ev.key.toLowerCase() === 'z' && (ev.ctrlKey || ev.metaKey) && !ev.shiftKey && !inInput) {
+      ev.preventDefault();
+      this._undo();
+      return;
+    }
+
     if (ev.key !== 'Delete' && ev.key !== 'Backspace') return;
     if (this.selectedSlot === null || !this.schedule) return;
     // Never hijack Delete/Backspace from an input field elsewhere in the
     // dialog (e.g. the time pickers).
-    const origin = ev.composedPath()[0];
-    if (origin instanceof HTMLElement
-      && (['input', 'textarea', 'select'].includes(origin.tagName.toLowerCase()) || origin.isContentEditable)) return;
+    if (inInput) return;
 
     // Deleting the not-yet-confirmed carved slot is just a revert.
     if (this.pendingSlot !== null && this.selectedSlot === this.pendingSlot) {
@@ -124,6 +150,7 @@ export class SchedulerTimeslotEditor extends LitElement {
     const slots = this.schedule.slots;
     if (slots.length <= 2) return;
     ev.preventDefault();
+    this._pushUndo();
 
     // Remove the slot by merging its range into a neighbour, mirroring the
     // panel's trash-button behaviour (remove_timeslot.ts).
@@ -415,6 +442,7 @@ export class SchedulerTimeslotEditor extends LitElement {
 
   private _commitCreate(ts0: number, ts1: number) {
     const oldSlots = [...this.schedule!.slots];
+    this._pushUndo();
     let [slots, newIdx] = carveTimeslot(oldSlots, ts0, ts1, this.hass);
 
     // Default the new slot to the OPPOSITE of its neighbour's on/off action
@@ -709,6 +737,7 @@ export class SchedulerTimeslotEditor extends LitElement {
   _handleDragStart(ev: MouseEvent | TouchEvent) {
     ev.preventDefault();
     ev.stopPropagation();
+    this._pushUndo();
 
     let el = ev.target as HTMLElement;
     while (el.tagName !== 'DIV') el = el.parentElement as HTMLElement;

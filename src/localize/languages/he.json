@@ -130,7 +130,10 @@
         "hide_excluded": "הסתר פריטים לא כלולים",
         "additional_tasks": "{number} נוסף {if number is 1} משימה {else} משימות",
         "overview_view": "הצג סקירת ציר זמן",
-        "list_view": "הצג תצוגת רשימה"
+        "list_view": "הצג תצוגת רשימה",
+        "tap_icon_to_toggle": "הקש להפעלה/כיבוי",
+        "saved": "נשמר",
+        "undo": "איפוס"
       },
       "editor": {
         "repeated_days": "ימים לחזרה",

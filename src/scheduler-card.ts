@@ -25,6 +25,8 @@ import "./components/scheduler-overview-row";
 import "./components/scheduler-overview-ruler";
 import { entityIncludedByConfig } from "./data/actions/entity_included_by_config";
 import { mdiViewDayOutline, mdiViewSequentialOutline } from "@mdi/js";
+import { consumeLastOverviewUndo } from "./lib/overview_undo";
+import { useAmPm } from "./lib/use_am_pm";
 
 const OVERVIEW_MIN_ZOOM = 1;
 const OVERVIEW_MAX_ZOOM = 48;
@@ -52,6 +54,10 @@ export class SchedulerCard extends LitElement {
   @state() private _overviewViewportWidth = 0;
 
   private _overviewZoomAnimationFrame?: number;
+
+  @state() private _now = new Date();
+
+  private _clockInterval?: number;
 
   translationsLoaded = false;
   connectionError = false;
@@ -94,10 +100,14 @@ export class SchedulerCard extends LitElement {
   public connectedCallback() {
     super.connectedCallback();
     this.__checkSubscribed();
+    window.addEventListener('keydown', this._handleUndoKeyDown);
+    this._clockInterval = window.setInterval(() => { this._now = new Date(); }, 1000 * 30);
   }
 
   public disconnectedCallback() {
     super.disconnectedCallback();
+    window.removeEventListener('keydown', this._handleUndoKeyDown);
+    if (this._clockInterval) clearInterval(this._clockInterval);
     if (this.__unsubs) {
       while (this.__unsubs.length) {
         const unsub = this.__unsubs.pop()!;
@@ -177,6 +187,8 @@ export class SchedulerCard extends LitElement {
       }
           </div>
 
+          ${this.overviewMode ? html`<div class="clock">${this._formatClock()}</div>` : ''}
+
           <div class="header-actions">
           ${Object.keys(this.schedules || {}).length ? html`
           <ha-icon-button
@@ -200,20 +212,24 @@ export class SchedulerCard extends LitElement {
           </div>
         </div>
 
-        <div class="card-content" id="states">
+        <div
+          class="card-content"
+          id="states"
+          @viewport-width-changed=${this._handleOverviewWidthChanged}
+          @overview-zoom=${this._handleOverviewZoom}
+          @overview-zoom-reset=${this._handleOverviewZoomReset}
+          @overview-pan=${this._handleOverviewPan}
+        >
 
     ${this.overviewMode && !this.connectionError && Object.keys(includedItems).length
         ? html`
           <scheduler-overview-ruler
             .hass=${this.hass}
+            .now=${this._now}
             .zoom=${this._overviewZoom}
             .panPx=${this._overviewPanPx}
             .minZoom=${OVERVIEW_MIN_ZOOM}
             .maxZoom=${OVERVIEW_MAX_ZOOM}
-            @viewport-width-changed=${this._handleOverviewWidthChanged}
-            @overview-zoom=${this._handleOverviewZoom}
-            @overview-zoom-reset=${this._handleOverviewZoomReset}
-            @overview-pan=${this._handleOverviewPan}
           ></scheduler-overview-ruler>
         `
         : ''}
@@ -366,6 +382,7 @@ export class SchedulerCard extends LitElement {
           .zoom=${this._overviewZoom}
           .panPx=${this._overviewPanPx}
           .viewportWidth=${this._overviewViewportWidth}
+          @editClick=${(ev: Event) => { this._handleEditClick(ev, scheduleItem) }}
         >
         </scheduler-overview-row>
       `
@@ -482,6 +499,30 @@ export class SchedulerCard extends LitElement {
     this._overviewPanPx = this._clampOverviewPan(this._overviewPanPx + ev.detail.deltaPx, this._overviewZoom);
   }
 
+  // Ctrl/Cmd+Z undoes the most recent overview-mode inline edit (the full
+  // timeslot editor has its own separate undo stack while its dialog is
+  // open). Ignored while typing in an input so normal text-undo still works.
+  private _formatClock() {
+    const amPm = useAmPm(this.hass.locale);
+    return this._now.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: amPm,
+    });
+  }
+
+  private _handleUndoKeyDown = (ev: KeyboardEvent) => {
+    if (ev.key.toLowerCase() !== 'z' || !(ev.ctrlKey || ev.metaKey) || ev.shiftKey) return;
+    const origin = ev.composedPath()[0];
+    if (origin instanceof HTMLElement
+      && (['input', 'textarea', 'select'].includes(origin.tagName.toLowerCase()) || origin.isContentEditable)) return;
+    const undo = consumeLastOverviewUndo();
+    if (undo) {
+      ev.preventDefault();
+      undo();
+    }
+  };
+
   toggleDisableAll(ev: Event) {
     if (!this.hass || !this.schedules) return;
     const checked = (ev.target as HTMLInputElement).checked;
@@ -511,6 +552,14 @@ export class SchedulerCard extends LitElement {
     .card-header .header-actions {
       display: flex;
       align-items: center;
+    }
+    .card-header .clock {
+      flex: 1;
+      text-align: center;
+      font-size: 0.95rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--secondary-text-color);
+      white-space: nowrap;
     }
     .card-header ha-switch {
       display: flex;
