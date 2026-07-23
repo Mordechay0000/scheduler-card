@@ -58,7 +58,10 @@ export class SchedulerOverviewBar extends LitElement {
   private _bodyResizeDrag?: { startClientX: number; slotIdx: number; active: boolean };
 
   private _onExternalSelect = (ev: Event) => {
-    if ((ev as CustomEvent).detail?.source !== this) this.selectedSlot = null;
+    if ((ev as CustomEvent).detail?.source !== this && this.selectedSlot !== null) {
+      this.selectedSlot = null;
+      this.dispatchEvent(new CustomEvent('slot-selected', { detail: { index: null }, bubbles: true, composed: true }));
+    }
   };
 
   connectedCallback() {
@@ -211,6 +214,7 @@ export class SchedulerOverviewBar extends LitElement {
     if (this.selectedSlot !== null) {
       document.dispatchEvent(new CustomEvent(SELECT_EVENT, { detail: { source: this } }));
     }
+    this.dispatchEvent(new CustomEvent('slot-selected', { detail: { index: this.selectedSlot }, bubbles: true, composed: true }));
   }
 
   // Pressing down on a slot's body and dragging sideways resizes it from

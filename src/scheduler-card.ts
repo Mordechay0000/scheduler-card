@@ -23,6 +23,7 @@ import "./dialogs/dialog-scheduler-editor";
 import "./components/scheduler-item-row";
 import "./components/scheduler-overview-row";
 import "./components/scheduler-overview-ruler";
+import "./components/scheduler-overview-add-row";
 import { entityIncludedByConfig } from "./data/actions/entity_included_by_config";
 import { mdiViewDayOutline, mdiViewSequentialOutline } from "@mdi/js";
 import { consumeLastOverviewUndo } from "./lib/overview_undo";
@@ -251,6 +252,18 @@ export class SchedulerCard extends LitElement {
         `
           : includedItems.map(scheduleItem => this._renderRow(scheduleItem))
       }
+
+      ${this.overviewMode && !this.connectionError && Object.keys(includedItems).length
+        ? html`
+          <scheduler-overview-add-row
+            .hass=${this.hass}
+            .config=${this._config}
+            .zoom=${this._overviewZoom}
+            .panPx=${this._overviewPanPx}
+            .viewportWidth=${this._overviewViewportWidth}
+          ></scheduler-overview-add-row>
+        `
+        : ''}
 
       ${Object.keys(items).length > includedItems.length && this._config.discover_existing !== false
         ? !this.showDiscovered

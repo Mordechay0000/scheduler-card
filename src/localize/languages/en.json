@@ -133,7 +133,10 @@
         "list_view": "Show list view",
         "tap_icon_to_toggle": "Tap to turn on/off",
         "saved": "Saved",
-        "undo": "Undo"
+        "undo": "Undo",
+        "add_schedule": "Add schedule",
+        "turn_on": "On",
+        "turn_off": "Off"
       },
       "editor": {
         "repeated_days": "Repeated days",

@@ -133,7 +133,10 @@
         "list_view": "הצג תצוגת רשימה",
         "tap_icon_to_toggle": "הקש להפעלה/כיבוי",
         "saved": "נשמר",
-        "undo": "איפוס"
+        "undo": "איפוס",
+        "add_schedule": "הוסף תזמון",
+        "turn_on": "הפעלה",
+        "turn_off": "כיבוי"
       },
       "editor": {
         "repeated_days": "ימים לחזרה",
