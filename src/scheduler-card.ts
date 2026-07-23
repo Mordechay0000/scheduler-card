@@ -26,6 +26,10 @@ import "./components/scheduler-overview-ruler";
 import { entityIncludedByConfig } from "./data/actions/entity_included_by_config";
 import { mdiViewDayOutline, mdiViewSequentialOutline } from "@mdi/js";
 
+const OVERVIEW_MIN_ZOOM = 1;
+const OVERVIEW_MAX_ZOOM = 48;
+const OVERVIEW_ZOOM_ANIMATION_MS = 220;
+
 @customElement('scheduler-card')
 export class SchedulerCard extends LitElement {
 
@@ -37,7 +41,17 @@ export class SchedulerCard extends LitElement {
 
   @state() showDiscovered: boolean = false;
 
-  @state() overviewMode: boolean = false;
+  // Overview is the default view: a compact shared-timeline look at every
+  // schedule, versus the older one-line-per-schedule list.
+  @state() overviewMode: boolean = true;
+
+  @state() private _overviewZoom = OVERVIEW_MIN_ZOOM;
+
+  @state() private _overviewPanPx = 0;
+
+  @state() private _overviewViewportWidth = 0;
+
+  private _overviewZoomAnimationFrame?: number;
 
   translationsLoaded = false;
   connectionError = false;
@@ -189,7 +203,19 @@ export class SchedulerCard extends LitElement {
         <div class="card-content" id="states">
 
     ${this.overviewMode && !this.connectionError && Object.keys(includedItems).length
-        ? html`<scheduler-overview-ruler .hass=${this.hass}></scheduler-overview-ruler>`
+        ? html`
+          <scheduler-overview-ruler
+            .hass=${this.hass}
+            .zoom=${this._overviewZoom}
+            .panPx=${this._overviewPanPx}
+            .minZoom=${OVERVIEW_MIN_ZOOM}
+            .maxZoom=${OVERVIEW_MAX_ZOOM}
+            @viewport-width-changed=${this._handleOverviewWidthChanged}
+            @overview-zoom=${this._handleOverviewZoom}
+            @overview-zoom-reset=${this._handleOverviewZoomReset}
+            @overview-pan=${this._handleOverviewPan}
+          ></scheduler-overview-ruler>
+        `
         : ''}
     ${this.connectionError
         ? html`
@@ -337,7 +363,9 @@ export class SchedulerCard extends LitElement {
           .config=${this._config}
           .schedule_id=${scheduleItem.schedule_id}
           .schedule=${scheduleItem}
-          @editClick=${(ev: Event) => { this._handleEditClick(ev, scheduleItem) }}
+          .zoom=${this._overviewZoom}
+          .panPx=${this._overviewPanPx}
+          .viewportWidth=${this._overviewViewportWidth}
         >
         </scheduler-overview-row>
       `
@@ -384,6 +412,74 @@ export class SchedulerCard extends LitElement {
       dialogImport: () => import('./dialogs/dialog-scheduler-editor'),
       dialogParams: params,
     });
+  }
+
+  private _clampOverviewPan(panPx: number, zoom: number) {
+    const maxPan = Math.max(0, this._overviewViewportWidth * zoom - this._overviewViewportWidth);
+    return Math.min(Math.max(panPx, 0), maxPan);
+  }
+
+  // Keep the content position under `anchorPx` fixed while changing zoom,
+  // the way map zoom controls behave. Mirrors the same math in
+  // scheduler-timeslot-editor.
+  private _setOverviewZoom(newZoom: number, anchorPx: number) {
+    const zoom = Math.min(Math.max(newZoom, OVERVIEW_MIN_ZOOM), OVERVIEW_MAX_ZOOM);
+    const oldContentWidth = this._overviewViewportWidth * this._overviewZoom;
+    const contentX = this._overviewPanPx + anchorPx;
+    const frac = oldContentWidth > 0 ? contentX / oldContentWidth : 0;
+    const newContentWidth = this._overviewViewportWidth * zoom;
+    const newPanPx = frac * newContentWidth - anchorPx;
+    this._overviewZoom = zoom;
+    this._overviewPanPx = this._clampOverviewPan(newPanPx, zoom);
+  }
+
+  private _handleOverviewWidthChanged(ev: CustomEvent) {
+    this._overviewViewportWidth = ev.detail.width;
+    this._overviewPanPx = this._clampOverviewPan(this._overviewPanPx, this._overviewZoom);
+  }
+
+  private _handleOverviewZoom(ev: CustomEvent) {
+    const { anchorPx, factor, absolute, animate } = ev.detail;
+    if (this._overviewZoomAnimationFrame) {
+      cancelAnimationFrame(this._overviewZoomAnimationFrame);
+      this._overviewZoomAnimationFrame = undefined;
+    }
+    const targetZoom = absolute !== undefined ? absolute : this._overviewZoom * (factor ?? 1);
+    if (!animate) {
+      this._setOverviewZoom(targetZoom, anchorPx);
+      return;
+    }
+    const startZoom = this._overviewZoom;
+    const clampedTarget = Math.min(Math.max(targetZoom, OVERVIEW_MIN_ZOOM), OVERVIEW_MAX_ZOOM);
+    const startTime = performance.now();
+    const step = (now: number) => {
+      const t = Math.min((now - startTime) / OVERVIEW_ZOOM_ANIMATION_MS, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      this._setOverviewZoom(startZoom + (clampedTarget - startZoom) * eased, anchorPx);
+      if (t < 1) this._overviewZoomAnimationFrame = requestAnimationFrame(step);
+      else this._overviewZoomAnimationFrame = undefined;
+    };
+    this._overviewZoomAnimationFrame = requestAnimationFrame(step);
+  }
+
+  private _handleOverviewZoomReset() {
+    if (this._overviewZoomAnimationFrame) cancelAnimationFrame(this._overviewZoomAnimationFrame);
+    const startZoom = this._overviewZoom;
+    const startPan = this._overviewPanPx;
+    const startTime = performance.now();
+    const step = (now: number) => {
+      const t = Math.min((now - startTime) / OVERVIEW_ZOOM_ANIMATION_MS, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      this._overviewZoom = startZoom + (OVERVIEW_MIN_ZOOM - startZoom) * eased;
+      this._overviewPanPx = startPan + (0 - startPan) * eased;
+      if (t < 1) this._overviewZoomAnimationFrame = requestAnimationFrame(step);
+      else this._overviewZoomAnimationFrame = undefined;
+    };
+    this._overviewZoomAnimationFrame = requestAnimationFrame(step);
+  }
+
+  private _handleOverviewPan(ev: CustomEvent) {
+    this._overviewPanPx = this._clampOverviewPan(this._overviewPanPx + ev.detail.deltaPx, this._overviewZoom);
   }
 
   toggleDisableAll(ev: Event) {

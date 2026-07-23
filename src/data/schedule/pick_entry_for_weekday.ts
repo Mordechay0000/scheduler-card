@@ -11,20 +11,21 @@ const JS_DAY_TO_WEEKDAY: TWeekday[] = [
 ];
 
 /**
- * Pick the entry that applies on a given date (defaults to today). Falls
- * back to the first entry if none match explicitly (e.g. workday/weekend
- * groups, which aren't resolved here - this is a display-only pick for the
- * overview, not the actual triggering logic).
+ * Pick the entry (and its index) that applies on a given date (defaults to
+ * today). Falls back to the first entry if none match explicitly (e.g.
+ * workday/weekend groups, which aren't resolved here - this is a
+ * display-only pick for the overview, not the actual triggering logic).
  */
-export const pickEntryForWeekday = (entries: ScheduleEntry[], date: Date = new Date()): ScheduleEntry => {
+export const pickEntryForWeekday = (entries: ScheduleEntry[], date: Date = new Date()): { entry: ScheduleEntry; index: number } => {
   const dayOfWeek = JS_DAY_TO_WEEKDAY[date.getDay()];
   const isWeekend = dayOfWeek === TWeekday.Friday || dayOfWeek === TWeekday.Saturday;
 
-  const match = entries.find(entry => entry.weekdays.includes(dayOfWeek))
-    || entries.find(entry => isWeekend
-      ? entry.weekdays.includes(TWeekday.Weekend)
-      : entry.weekdays.includes(TWeekday.Workday))
-    || entries.find(entry => entry.weekdays.includes(TWeekday.Daily));
+  const index = entries.findIndex(entry => entry.weekdays.includes(dayOfWeek));
+  const fallbackIndex = index >= 0 ? index : entries.findIndex(entry => isWeekend
+    ? entry.weekdays.includes(TWeekday.Weekend)
+    : entry.weekdays.includes(TWeekday.Workday));
+  const dailyIndex = fallbackIndex >= 0 ? fallbackIndex : entries.findIndex(entry => entry.weekdays.includes(TWeekday.Daily));
+  const finalIndex = dailyIndex >= 0 ? dailyIndex : 0;
 
-  return match || entries[0];
+  return { entry: entries[finalIndex], index: finalIndex };
 };
