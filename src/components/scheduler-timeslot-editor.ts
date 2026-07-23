@@ -74,6 +74,14 @@ export class SchedulerTimeslotEditor extends LitElement {
 
   private _lastBarTap?: { time: number; x: number };
 
+  private _lastBarClick?: { time: number; x: number };
+
+  // Drag-the-body-to-resize state: pressing down on a slot's own surface
+  // (not a handle) and moving sideways resizes it from whichever edge the
+  // drag moves toward, consuming space from that neighbour. Only engages
+  // past a small threshold so a plain click still selects the slot.
+  private _bodyResizeDrag?: { startClientX: number; slotIdx: number; active: boolean };
+
   // Single-branch undo history for Ctrl/Cmd+Z: a snapshot pushed right
   // before each committing mutation (drag release, delete, carve).
   private _undoStack: Timeslot[][] = [];
@@ -353,13 +361,14 @@ export class SchedulerTimeslotEditor extends LitElement {
     // handles and their buttons manage their own dragging).
     if (ev.button !== 0) return;
     const target = ev.target as HTMLElement;
-    if (!target.closest('.slot')) return;
+    const slotEl = target.closest('.slot') as HTMLElement | null;
+    if (!slotEl) return;
     if (this._pinch) return;
 
     // On touch, a single-finger drag on the bar must PAN the (zoomed) view -
     // otherwise there is no way to move sideways with one finger. Creating a
     // slot by touch requires a double-tap-and-drag instead: tap once, then
-    // immediately touch again and drag. Mouse drags always create.
+    // immediately touch again and drag.
     if (ev.pointerType === 'touch') {
       const now = performance.now();
       const isDoubleTap = this._lastBarTap !== undefined
@@ -368,6 +377,19 @@ export class SchedulerTimeslotEditor extends LitElement {
       this._lastBarTap = { time: now, x: ev.clientX };
       if (!isDoubleTap) {
         this._startBarPan(ev);
+        return;
+      }
+    } else {
+      // Mouse: a plain single drag now resizes the slot's body instead of
+      // creating a new one - creating requires a double-click-and-drag,
+      // matching the touch double-tap-and-drag gesture.
+      const now = performance.now();
+      const isDoubleClick = this._lastBarClick !== undefined
+        && now - this._lastBarClick.time < 400
+        && Math.abs(ev.clientX - this._lastBarClick.x) < 10;
+      this._lastBarClick = { time: now, x: ev.clientX };
+      if (!isDoubleClick) {
+        this._startBodyResizeDrag(ev, slotEl);
         return;
       }
     }
@@ -743,9 +765,57 @@ export class SchedulerTimeslotEditor extends LitElement {
     while (el.tagName !== 'DIV') el = el.parentElement as HTMLElement;
 
     const trackElement = el.parentElement as HTMLElement;
+    const slotIdx = Number(el.getAttribute("idx"));
+    this._startBoundaryDrag(slotIdx, trackElement);
+  }
+
+  // Pressing down directly on a slot's body and dragging sideways resizes it
+  // from whichever edge the drag moves toward (consuming space from that
+  // neighbour), in addition to dragging the boundary handles directly.
+  private _startBodyResizeDrag(ev: PointerEvent, slotEl: HTMLElement) {
+    const startClientX = ev.clientX;
+    const slotIdx = Number(slotEl.getAttribute('idx'));
+    this._bodyResizeDrag = { startClientX, slotIdx, active: false };
+
+    const moveHandler = (mv: PointerEvent) => {
+      if (!this._bodyResizeDrag) return;
+      const dx = mv.clientX - this._bodyResizeDrag.startClientX;
+      if (this._bodyResizeDrag.active || Math.abs(dx) < 5) return;
+      this._bodyResizeDrag.active = true;
+      window.removeEventListener('pointermove', moveHandler);
+      window.removeEventListener('pointerup', upHandler);
+      window.removeEventListener('pointercancel', upHandler);
+
+      const slots = this.schedule!.slots;
+      const isRtl = getComputedStyle(this).direction === 'rtl';
+      const movingRight = dx > 0;
+      // The slot's visually-right edge is its later-time boundary in LTR,
+      // but its earlier-time boundary in RTL (time flows right-to-left).
+      let dragSlotIdx = movingRight === !isRtl ? slotIdx : slotIdx - 1;
+      if (dragSlotIdx < 0 || dragSlotIdx > slots.length - 2 || slots[dragSlotIdx + 1].stop === undefined) {
+        this._bodyResizeDrag = undefined;
+        return;
+      }
+      this._suppressNextClick = true;
+      this._pushUndo();
+      const trackElement = this.shadowRoot!.querySelector('.bar') as HTMLElement;
+      this._startBoundaryDrag(dragSlotIdx, trackElement);
+      this._bodyResizeDrag = undefined;
+    };
+    const upHandler = () => {
+      window.removeEventListener('pointermove', moveHandler);
+      window.removeEventListener('pointerup', upHandler);
+      window.removeEventListener('pointercancel', upHandler);
+      this._bodyResizeDrag = undefined;
+    };
+    window.addEventListener('pointermove', moveHandler);
+    window.addEventListener('pointerup', upHandler);
+    window.addEventListener('pointercancel', upHandler);
+  }
+
+  private _startBoundaryDrag(slotIdx: number, trackElement: HTMLElement) {
     const trackBounds = trackElement.getBoundingClientRect();
 
-    const slotIdx = Number(el.getAttribute("idx"));
     // Zoomed in far enough to see individual minutes clearly: drop the
     // configured step size and snap to exact minutes instead.
     const stepSize = this._zoom >= MINUTE_DRAG_ZOOM_THRESHOLD ? 1 : (this.config.time_step || DEFAULT_TIME_STEP);

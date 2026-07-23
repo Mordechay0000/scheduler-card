@@ -55,6 +55,8 @@ export class SchedulerOverviewBar extends LitElement {
 
   private _pinch?: { distance: number; midpointX: number };
 
+  private _bodyResizeDrag?: { startClientX: number; slotIdx: number; active: boolean };
+
   private _onExternalSelect = (ev: Event) => {
     if ((ev as CustomEvent).detail?.source !== this) this.selectedSlot = null;
   };
@@ -183,7 +185,7 @@ export class SchedulerOverviewBar extends LitElement {
         width: `${slotWidths[i]}px`,
         ...(color ? { background: `rgba(${color.rgb.join(', ')}, ${color.alpha})` } : {}),
       })}
-                    @click=${(ev: Event) => this._selectSlot(ev, i)}
+                    @pointerdown=${(ev: PointerEvent) => this._handleSegPointerDown(ev, i)}
                   ></div>
                   ${i < slots.length - 1 && slot.stop ? html`
                     <div
@@ -211,6 +213,42 @@ export class SchedulerOverviewBar extends LitElement {
     }
   }
 
+  // Pressing down on a slot's body and dragging sideways resizes it from
+  // whichever edge the drag moves toward (consuming space from that
+  // neighbour); a plain click (no meaningful movement) still selects it.
+  private _handleSegPointerDown(ev: PointerEvent, i: number) {
+    const startClientX = ev.clientX;
+    this._bodyResizeDrag = { startClientX, slotIdx: i, active: false };
+
+    const moveHandler = (mv: PointerEvent) => {
+      if (!this._bodyResizeDrag) return;
+      const dx = mv.clientX - this._bodyResizeDrag.startClientX;
+      if (this._bodyResizeDrag.active || Math.abs(dx) < 5) return;
+      this._bodyResizeDrag.active = true;
+      window.removeEventListener('pointermove', moveHandler);
+      window.removeEventListener('pointerup', upHandler);
+      window.removeEventListener('pointercancel', upHandler);
+
+      const slots = this._slots;
+      const isRtl = getComputedStyle(this).direction === 'rtl';
+      const movingRight = dx > 0;
+      const dragSlotIdx = movingRight === !isRtl ? i : i - 1;
+      this._bodyResizeDrag = undefined;
+      if (dragSlotIdx < 0 || dragSlotIdx > slots.length - 2 || slots[dragSlotIdx + 1].stop === undefined) return;
+      this._startBoundaryDrag(dragSlotIdx);
+    };
+    const upHandler = () => {
+      window.removeEventListener('pointermove', moveHandler);
+      window.removeEventListener('pointerup', upHandler);
+      window.removeEventListener('pointercancel', upHandler);
+      if (!this._bodyResizeDrag?.active) this._selectSlot(ev, i);
+      this._bodyResizeDrag = undefined;
+    };
+    window.addEventListener('pointermove', moveHandler);
+    window.addEventListener('pointerup', upHandler);
+    window.addEventListener('pointercancel', upHandler);
+  }
+
   private get _dragStepSize() {
     return this.zoom >= MINUTE_DRAG_ZOOM_THRESHOLD ? 1 : (this.config?.time_step || DEFAULT_TIME_STEP);
   }
@@ -218,7 +256,10 @@ export class SchedulerOverviewBar extends LitElement {
   private _handleDragStart(ev: MouseEvent | TouchEvent, slotIdx: number) {
     ev.preventDefault();
     ev.stopPropagation();
+    this._startBoundaryDrag(slotIdx);
+  }
 
+  private _startBoundaryDrag(slotIdx: number) {
     const slots = this._slots;
     // Only fixed-time boundaries support quick dragging here; sunrise/sunset
     // offsets need the full dialog.
