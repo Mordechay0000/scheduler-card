@@ -43,6 +43,14 @@ export const computeActionColor = (action: Action): { rgb: [number, number, numb
 
   const data = action.service_data || {};
 
+  // An explicit colour wins over a colour temperature: it is what the bulb
+  // will actually show.
+  let explicitRgb: [number, number, number] | undefined;
+  if (Array.isArray(data.rgb_color) && data.rgb_color.length >= 3
+    && data.rgb_color.slice(0, 3).every((e: unknown) => typeof e === 'number')) {
+    explicitRgb = data.rgb_color.slice(0, 3) as [number, number, number];
+  }
+
   let kelvin: number | undefined;
   if (typeof data.color_temp_kelvin === 'number') kelvin = data.color_temp_kelvin;
   else if (typeof data.color_temp === 'number') kelvin = miredToKelvin(data.color_temp);
@@ -51,9 +59,11 @@ export const computeActionColor = (action: Action): { rgb: [number, number, numb
   if (typeof data.brightness === 'number') brightnessPct = (data.brightness / 255) * 100;
   else if (typeof data.brightness_pct === 'number') brightnessPct = data.brightness_pct;
 
-  if (kelvin === undefined && brightnessPct === undefined) return null;
+  if (explicitRgb === undefined && kelvin === undefined && brightnessPct === undefined) return null;
 
-  const rgb = kelvin !== undefined ? kelvinToRgb(kelvin) : DEFAULT_ON_RGB;
+  const rgb = explicitRgb !== undefined
+    ? explicitRgb
+    : kelvin !== undefined ? kelvinToRgb(kelvin) : DEFAULT_ON_RGB;
   const alpha = brightnessPct !== undefined
     ? MIN_ALPHA + (MAX_ALPHA - MIN_ALPHA) * Math.min(Math.max(brightnessPct, 0), 100) / 100
     : DEFAULT_ALPHA;

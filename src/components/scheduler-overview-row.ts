@@ -27,8 +27,10 @@ export class SchedulerOverviewRow extends LitElement {
 
   @state() private _saveState: 'saved' | 'reset' | null = null;
 
-  private _undoSlots?: Timeslot[];
-  private _undoEntryIndex?: number;
+  // Every change since this card was opened, oldest first. Ctrl/Cmd+Z steps
+  // back one entry; the "reset" button jumps all the way back to the first
+  // one (the state the schedule had before any overview editing).
+  private _undoStack: { slots: Timeslot[]; entryIndex: number }[] = [];
   private _saveStateTimer?: number;
 
   render() {
@@ -66,15 +68,20 @@ export class SchedulerOverviewRow extends LitElement {
               @click=${this._handleToggle}
             ></ha-icon>
             <span class="label" @click=${this._handleEditClick}>${label}</span>
-          </div>
-          <div class="bar-wrap">
             ${this._saveState ? html`
-              <button class="save-pill ${this._saveState}" @click=${this._handlePillClick}>
+              <button
+                class="save-pill ${this._saveState}"
+                ?disabled=${this._saveState !== 'reset'}
+                title=${this._saveState === 'reset' ? localize('ui.panel.overview.reset_hint', this.hass) : ''}
+                @click=${this._handlePillClick}
+              >
                 ${this._saveState === 'saved'
         ? localize('ui.panel.overview.saved', this.hass)
         : localize('ui.panel.overview.undo', this.hass)}
               </button>
             ` : ''}
+          </div>
+          <div class="bar-wrap">
             <scheduler-overview-bar
               .hass=${this.hass}
               .config=${this.config}
@@ -109,8 +116,7 @@ export class SchedulerOverviewRow extends LitElement {
     ev.stopPropagation();
     // Capture the pre-change state BEFORE saving, so undo/reset has
     // something to go back to even if the save itself fails.
-    this._undoSlots = this.schedule.entries[entryIndex].slots;
-    this._undoEntryIndex = entryIndex;
+    this._undoStack.push({ slots: this.schedule.entries[entryIndex].slots, entryIndex });
     setLastOverviewUndo(() => this._performUndo());
     this._showSaved();
 
@@ -141,15 +147,30 @@ export class SchedulerOverviewRow extends LitElement {
 
   private _handlePillClick() {
     // Only the "reset" state is actionable; while it still reads "saved"
-    // the pill is just a confirmation.
-    if (this._saveState === 'reset') this._performUndo();
+    // the pill is just a confirmation of the change that was written.
+    if (this._saveState === 'reset') this._performReset();
   }
 
+  // Ctrl/Cmd+Z: step back one change.
   private _performUndo() {
-    if (this._undoSlots === undefined || this._undoEntryIndex === undefined) return;
-    this._saveAndSet(this._undoEntryIndex, this._undoSlots);
-    this._undoSlots = undefined;
-    this._undoEntryIndex = undefined;
+    const previous = this._undoStack.pop();
+    if (!previous) return;
+    this._saveAndSet(previous.entryIndex, previous.slots);
+    if (this._undoStack.length) setLastOverviewUndo(() => this._performUndo());
+    else this._clearSaveState();
+  }
+
+  // "Reset": discard every overview edit made since the card was opened,
+  // going back to the very first recorded state rather than one step.
+  private _performReset() {
+    const original = this._undoStack[0];
+    if (!original) return;
+    this._undoStack = [];
+    this._saveAndSet(original.entryIndex, original.slots);
+    this._clearSaveState();
+  }
+
+  private _clearSaveState() {
     setLastOverviewUndo(null);
     clearTimeout(this._saveStateTimer);
     this._saveState = null;
@@ -218,9 +239,10 @@ export class SchedulerOverviewRow extends LitElement {
         opacity: 0.5;
       }
       .save-pill {
-        position: absolute;
-        top: 0;
-        inset-inline-end: 0;
+        /* Lives in the device column, not over the bar: the bar's own
+           boundary time labels occupy every free spot above it, and the
+           strip itself must not be covered. */
+        flex: 0 0 auto;
         font-size: 0.62rem;
         font-family: inherit;
         line-height: 1;
@@ -236,6 +258,7 @@ export class SchedulerOverviewRow extends LitElement {
         color: rgb(var(--rgb-state-active-color, 67, 160, 71));
         border-color: rgba(var(--rgb-state-active-color, 67, 160, 71), 0.5);
         animation: save-pulse 1.6s ease-in-out;
+        opacity: 1;
       }
       .save-pill.reset {
         cursor: pointer;

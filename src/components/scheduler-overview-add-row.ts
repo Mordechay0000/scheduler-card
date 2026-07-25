@@ -101,9 +101,25 @@ export class SchedulerOverviewAddRow extends LitElement {
     const i = this._selectedSlot;
     if (i === null || !this._slots[i]?.actions.length) return;
     const action = this._slots[i].actions[0];
-    const service_data = { ...action.service_data };
+    const service_data: Record<string, any> = { ...action.service_data };
     if (value === undefined) delete service_data[key];
     else service_data[key] = value;
+    // A colour temperature and an explicit colour are mutually exclusive.
+    if (key === 'color_temp_kelvin') delete service_data.rgb_color;
+    this._slots = Object.assign([...this._slots], {
+      [i]: { ...this._slots[i], actions: [{ ...action, service_data }] },
+    });
+  }
+
+  private _setSelectedColor(hex: string) {
+    const i = this._selectedSlot;
+    if (i === null || !this._slots[i]?.actions.length) return;
+    const action = this._slots[i].actions[0];
+    const rgb = [1, 3, 5].map(o => parseInt(hex.substr(o, 2), 16));
+    // A concrete colour and a colour temperature are mutually exclusive for
+    // a light; keep only the one the user just chose.
+    const service_data: Record<string, any> = { ...action.service_data, rgb_color: rgb };
+    delete service_data.color_temp_kelvin;
     this._slots = Object.assign([...this._slots], {
       [i]: { ...this._slots[i], actions: [{ ...action, service_data }] },
     });
@@ -115,6 +131,11 @@ export class SchedulerOverviewAddRow extends LitElement {
     const brightness = action.service_data.brightness;
     const kelvin = action.service_data.color_temp_kelvin;
     const supportsTemp = supported.includes('color_temp');
+    const supportsColor = ['hs', 'rgb', 'rgbw', 'rgbww', 'xy'].some(m => supported.includes(m));
+    const rgb = action.service_data.rgb_color;
+    const hex = Array.isArray(rgb) && rgb.length >= 3
+      ? '#' + rgb.slice(0, 3).map((v: number) => Math.round(v).toString(16).padStart(2, '0')).join('')
+      : '#ffb46b';
 
     return html`
       <div class="params">
@@ -133,6 +154,16 @@ export class SchedulerOverviewAddRow extends LitElement {
               type="range" min="2000" max="6500" step="100"
               .value=${String(kelvin ?? 4000)}
               @input=${(ev: Event) => this._setSelectedParam('color_temp_kelvin', Number((ev.target as HTMLInputElement).value))}
+            />
+          </label>
+        ` : nothing}
+        ${supportsColor ? html`
+          <label>
+            <span>${localize('ui.panel.overview.color', this.hass)}</span>
+            <input
+              type="color"
+              .value=${hex}
+              @input=${(ev: Event) => this._setSelectedColor((ev.target as HTMLInputElement).value)}
             />
           </label>
         ` : nothing}
@@ -206,25 +237,27 @@ export class SchedulerOverviewAddRow extends LitElement {
               @slot-selected=${this._handleSlotSelected}
             ></scheduler-overview-bar>
             ${selected !== null ? html`
-              <div class="action-float">
-                <button
-                  class="act on ${currentOn ? 'active' : ''}"
-                  @click=${() => this._setSelectedAction(true)}
-                >
-                  <ha-svg-icon .path=${mdiPower}></ha-svg-icon>
-                  ${localize('ui.panel.overview.turn_on', this.hass)}
-                </button>
-                <button
-                  class="act off ${currentOn === false ? 'active' : ''}"
-                  @click=${() => this._setSelectedAction(false)}
-                >
-                  <ha-svg-icon .path=${mdiPowerOff}></ha-svg-icon>
-                  ${localize('ui.panel.overview.turn_off', this.hass)}
-                </button>
-              </div>
-              ${currentOn && this._slots[selected]?.actions.length
+              <div class="action-panel">
+                <div class="act-group">
+                  <button
+                    class="act on ${currentOn ? 'active' : ''}"
+                    @click=${() => this._setSelectedAction(true)}
+                  >
+                    <ha-svg-icon .path=${mdiPower}></ha-svg-icon>
+                    ${localize('ui.panel.overview.turn_on', this.hass)}
+                  </button>
+                  <button
+                    class="act off ${currentOn === false ? 'active' : ''}"
+                    @click=${() => this._setSelectedAction(false)}
+                  >
+                    <ha-svg-icon .path=${mdiPowerOff}></ha-svg-icon>
+                    ${localize('ui.panel.overview.turn_off', this.hass)}
+                  </button>
+                </div>
+                ${currentOn && this._slots[selected]?.actions.length
         ? this._renderParams(this._slots[selected].actions[0])
         : nothing}
+              </div>
             ` : nothing}
           ` : nothing}
         </div>
@@ -304,13 +337,23 @@ export class SchedulerOverviewAddRow extends LitElement {
         min-width: 0;
         position: relative;
       }
-      .action-float {
-        position: absolute;
-        top: -16px;
-        inset-inline-end: 0;
+      /* One panel directly under the selected slot's bar: the action and
+         its settings read as a single popover attached to that slot,
+         rather than controls scattered around the bar. */
+      .action-panel {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px 14px;
+        margin-top: 8px;
+        padding: 7px 10px;
+        border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+        border-radius: 10px;
+        background: var(--card-background-color);
+      }
+      .act-group {
         display: flex;
         gap: 4px;
-        z-index: 7;
       }
       .act {
         display: flex;
@@ -342,7 +385,6 @@ export class SchedulerOverviewAddRow extends LitElement {
         display: flex;
         gap: 14px;
         align-items: center;
-        margin-top: 5px;
         flex-wrap: wrap;
       }
       .params label {
@@ -355,6 +397,15 @@ export class SchedulerOverviewAddRow extends LitElement {
       .params input[type='range'] {
         width: 92px;
         accent-color: var(--primary-color);
+      }
+      .params input[type='color'] {
+        width: 26px;
+        height: 18px;
+        padding: 0;
+        border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+        border-radius: 4px;
+        background: none;
+        cursor: pointer;
       }
     `;
   }

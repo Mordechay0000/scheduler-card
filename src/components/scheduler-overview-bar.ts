@@ -5,6 +5,7 @@ import { CardConfig, Time, TimeMode, Timeslot } from '../types';
 import { HomeAssistant } from '../lib/types';
 import { isOffAction, isOnAction, invertOnOffAction } from '../data/format/is_off_action';
 import { carveTimeslot } from '../data/schedule/carve_timeslot';
+import { mergeEqualAdjacentSlots } from '../data/schedule/merge_equal_slots';
 import { computeActionColor } from '../data/format/compute_action_color';
 import { computeSlotWidths } from '../data/time/compute_slot_widths';
 import { computeSlotBoundaries } from '../data/format/compute_slot_boundaries';
@@ -76,12 +77,43 @@ export class SchedulerOverviewBar extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     document.addEventListener(SELECT_EVENT, this._onExternalSelect);
+    window.addEventListener('keydown', this._handleKeyDown);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     document.removeEventListener(SELECT_EVENT, this._onExternalSelect);
+    window.removeEventListener('keydown', this._handleKeyDown);
   }
+
+  // Delete/Backspace removes the selected slot, exactly as in the full
+  // editor: its range is merged into a neighbour, and if that leaves two
+  // neighbours with identical effects they collapse into one.
+  private _handleKeyDown = (ev: KeyboardEvent) => {
+    if (ev.key !== 'Delete' && ev.key !== 'Backspace') return;
+    if (this.selectedSlot === null) return;
+    const origin = ev.composedPath()[0];
+    if (origin instanceof HTMLElement
+      && (['input', 'textarea', 'select'].includes(origin.tagName.toLowerCase()) || origin.isContentEditable)) return;
+
+    const slots = this._slots;
+    if (slots.length <= 2) return;
+    ev.preventDefault();
+
+    const slotIdx = this.selectedSlot;
+    const cutIndex = slotIdx === slots.length - 1 ? slotIdx - 1 : slotIdx;
+    let newSlots = [
+      ...slots.slice(0, cutIndex),
+      { ...slots[cutIndex + 1], start: slots[cutIndex].start, stop: slots[cutIndex + 1].stop! },
+      ...slots.slice(cutIndex + 2),
+    ];
+    newSlots = mergeEqualAdjacentSlots(newSlots);
+
+    this._liveSlots = newSlots;
+    this.selectedSlot = null;
+    this.dispatchEvent(new CustomEvent('slot-selected', { detail: { index: null }, bubbles: true, composed: true }));
+    this.dispatchEvent(new CustomEvent('slots-changed', { detail: { slots: newSlots }, bubbles: true, composed: true }));
+  };
 
   updated(changed: Map<string, unknown>) {
     if (changed.has('slots')) this._liveSlots = undefined;
@@ -334,10 +366,12 @@ export class SchedulerOverviewBar extends LitElement {
         ts1: Math.max(this._createDrag.ts0, ts),
       };
     };
+    const dragStartHandler = (e: Event) => e.preventDefault();
     const upHandler = () => {
       window.removeEventListener('pointermove', moveHandler);
       window.removeEventListener('pointerup', upHandler);
       window.removeEventListener('pointercancel', upHandler);
+      window.removeEventListener('dragstart', dragStartHandler);
       const drag = this._createDrag;
       const range = this._createRange;
       this._createDrag = undefined;
@@ -349,6 +383,7 @@ export class SchedulerOverviewBar extends LitElement {
     window.addEventListener('pointermove', moveHandler);
     window.addEventListener('pointerup', upHandler);
     window.addEventListener('pointercancel', upHandler);
+    window.addEventListener('dragstart', dragStartHandler);
   }
 
   private _commitCreate(ts0: number, ts1: number) {
@@ -425,11 +460,18 @@ export class SchedulerOverviewBar extends LitElement {
       this._liveSlots = newSlots;
     };
 
+    // Without this the browser can start a native HTML5 drag mid-gesture,
+    // which fires pointercancel and swallows the mouseup entirely - the
+    // boundary would move on screen and then never commit.
+    const dragStartHandler = (e: Event) => e.preventDefault();
+
     const upHandler = () => {
       window.removeEventListener('mousemove', moveHandler);
       window.removeEventListener('touchmove', moveHandler);
       window.removeEventListener('mouseup', upHandler);
       window.removeEventListener('touchend', upHandler);
+      window.removeEventListener('pointercancel', upHandler);
+      window.removeEventListener('dragstart', dragStartHandler);
       if (this._liveSlots) {
         this.dispatchEvent(new CustomEvent('slots-changed', { detail: { slots: this._liveSlots }, bubbles: true, composed: true }));
       }
@@ -439,6 +481,8 @@ export class SchedulerOverviewBar extends LitElement {
     window.addEventListener('touchmove', moveHandler);
     window.addEventListener('mouseup', upHandler);
     window.addEventListener('touchend', upHandler);
+    window.addEventListener('pointercancel', upHandler);
+    window.addEventListener('dragstart', dragStartHandler);
   }
 
   static get styles(): CSSResultGroup {
@@ -511,6 +555,10 @@ export class SchedulerOverviewBar extends LitElement {
         width: 100%;
         height: 22px;
         position: relative;
+        /* No selectable text here - a stray selection lets the browser
+           start a native drag that cancels an in-progress edit. */
+        user-select: none;
+        -webkit-user-select: none;
       }
       .seg {
         height: 100%;

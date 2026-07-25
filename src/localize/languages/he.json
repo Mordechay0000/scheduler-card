@@ -138,7 +138,9 @@
         "turn_on": "הפעלה",
         "turn_off": "כיבוי",
         "brightness": "בהירות",
-        "color_temp": "טמפרטורת צבע"
+        "color_temp": "טמפרטורת צבע",
+        "color": "צבע",
+        "reset_hint": "בטל את כל השינויים שבוצעו מאז פתיחת הכרטיס"
       },
       "editor": {
         "repeated_days": "ימים לחזרה",

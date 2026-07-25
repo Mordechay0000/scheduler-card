@@ -138,7 +138,9 @@
         "turn_on": "On",
         "turn_off": "Off",
         "brightness": "Brightness",
-        "color_temp": "Color temp"
+        "color_temp": "Color temp",
+        "color": "Color",
+        "reset_hint": "Undo all changes made since the card was opened"
       },
       "editor": {
         "repeated_days": "Repeated days",
