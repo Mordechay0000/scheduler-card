@@ -136,7 +136,9 @@
         "undo": "Undo",
         "add_schedule": "Add schedule",
         "turn_on": "On",
-        "turn_off": "Off"
+        "turn_off": "Off",
+        "brightness": "Brightness",
+        "color_temp": "Color temp"
       },
       "editor": {
         "repeated_days": "Repeated days",

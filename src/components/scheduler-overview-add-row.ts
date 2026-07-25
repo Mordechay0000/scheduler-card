@@ -67,10 +67,11 @@ export class SchedulerOverviewAddRow extends LitElement {
     this._picking = false;
     // Start divided into three (on during the middle of the day), same
     // spirit as the full editor's default, but immediately valid to save.
+    // The backend represents end-of-day as 00:00:00, not 24:00:00.
     this._slots = [
       { start: '00:00:00', stop: '08:00:00', actions: [offAction(entityId)], conditions: conditions() },
       { start: '08:00:00', stop: '16:00:00', actions: [onAction(entityId)], conditions: conditions() },
-      { start: '16:00:00', stop: '24:00:00', actions: [offAction(entityId)], conditions: conditions() },
+      { start: '16:00:00', stop: '00:00:00', actions: [offAction(entityId)], conditions: conditions() },
     ];
     this._selectedSlot = null;
   }
@@ -91,6 +92,52 @@ export class SchedulerOverviewAddRow extends LitElement {
     this._slots = Object.assign([...this._slots], {
       [this._selectedSlot]: { ...this._slots[this._selectedSlot], actions: [action] },
     });
+  }
+
+  // Live-update a turn_on action's parameters (brightness / colour
+  // temperature). The bar re-tints itself from these on every render, so
+  // dragging a slider previews the setting straight away.
+  private _setSelectedParam(key: string, value: number | undefined) {
+    const i = this._selectedSlot;
+    if (i === null || !this._slots[i]?.actions.length) return;
+    const action = this._slots[i].actions[0];
+    const service_data = { ...action.service_data };
+    if (value === undefined) delete service_data[key];
+    else service_data[key] = value;
+    this._slots = Object.assign([...this._slots], {
+      [i]: { ...this._slots[i], actions: [{ ...action, service_data }] },
+    });
+  }
+
+  private _renderParams(action: Action) {
+    if (computeDomain(action.service) !== 'light') return nothing;
+    const supported = this.hass.states[this._entityId!]?.attributes?.supported_color_modes || [];
+    const brightness = action.service_data.brightness;
+    const kelvin = action.service_data.color_temp_kelvin;
+    const supportsTemp = supported.includes('color_temp');
+
+    return html`
+      <div class="params">
+        <label>
+          <span>${localize('ui.panel.overview.brightness', this.hass)}</span>
+          <input
+            type="range" min="1" max="255"
+            .value=${String(brightness ?? 255)}
+            @input=${(ev: Event) => this._setSelectedParam('brightness', Number((ev.target as HTMLInputElement).value))}
+          />
+        </label>
+        ${supportsTemp ? html`
+          <label>
+            <span>${localize('ui.panel.overview.color_temp', this.hass)}</span>
+            <input
+              type="range" min="2000" max="6500" step="100"
+              .value=${String(kelvin ?? 4000)}
+              @input=${(ev: Event) => this._setSelectedParam('color_temp_kelvin', Number((ev.target as HTMLInputElement).value))}
+            />
+          </label>
+        ` : nothing}
+      </div>
+    `;
   }
 
   private async _save() {
@@ -175,6 +222,9 @@ export class SchedulerOverviewAddRow extends LitElement {
                   ${localize('ui.panel.overview.turn_off', this.hass)}
                 </button>
               </div>
+              ${currentOn && this._slots[selected]?.actions.length
+        ? this._renderParams(this._slots[selected].actions[0])
+        : nothing}
             ` : nothing}
           ` : nothing}
         </div>
@@ -287,6 +337,24 @@ export class SchedulerOverviewAddRow extends LitElement {
         background: rgb(211, 47, 47);
         border-color: transparent;
         color: var(--text-primary-color, #fff);
+      }
+      .params {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        margin-top: 5px;
+        flex-wrap: wrap;
+      }
+      .params label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.62rem;
+        color: var(--secondary-text-color);
+      }
+      .params input[type='range'] {
+        width: 92px;
+        accent-color: var(--primary-color);
       }
     `;
   }

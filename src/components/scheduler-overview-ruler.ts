@@ -79,7 +79,7 @@ export class SchedulerOverviewRuler extends LitElement {
     if (isZoomGesture) {
       // More sensitive than a typical wheel-zoom map so it doesn't take a
       // lot of scrolling to get anywhere.
-      const factor = Math.pow(2, -ev.deltaY / 120);
+      const factor = Math.pow(2, -ev.deltaY / 60);
       this._fireZoom({ anchorPx, factor });
     } else {
       this.dispatchEvent(new CustomEvent('overview-pan', { detail: { deltaPx: ev.deltaX }, bubbles: true, composed: true }));
@@ -148,14 +148,14 @@ export class SchedulerOverviewRuler extends LitElement {
       <div class="zoom-controls">
         <ha-icon-button
           .disabled=${this.zoom <= this.minZoom}
-          @click=${() => this._fireZoom({ anchorPx: this._width / 2, factor: 1 / 2.2, animate: true })}
+          @click=${() => this._fireZoom({ anchorPx: this._width / 2, factor: 1 / 3, animate: true })}
         >
           <ha-icon icon="mdi:magnify-minus-outline"></ha-icon>
         </ha-icon-button>
         <span class="zoom-level" @click=${this._fireReset}>${zoomPct}%</span>
         <ha-icon-button
           .disabled=${this.zoom >= this.maxZoom}
-          @click=${() => this._fireZoom({ anchorPx: this._width / 2, factor: 2.2, animate: true })}
+          @click=${() => this._fireZoom({ anchorPx: this._width / 2, factor: 3, animate: true })}
         >
           <ha-icon icon="mdi:magnify-plus-outline"></ha-icon>
         </ha-icon-button>

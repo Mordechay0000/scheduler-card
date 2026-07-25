@@ -136,7 +136,9 @@
         "undo": "איפוס",
         "add_schedule": "הוסף תזמון",
         "turn_on": "הפעלה",
-        "turn_off": "כיבוי"
+        "turn_off": "כיבוי",
+        "brightness": "בהירות",
+        "color_temp": "טמפרטורת צבע"
       },
       "editor": {
         "repeated_days": "ימים לחזרה",

@@ -69,7 +69,7 @@ export class SchedulerOverviewRow extends LitElement {
           </div>
           <div class="bar-wrap">
             ${this._saveState ? html`
-              <button class="save-pill ${this._saveState}" @click=${this._performUndo}>
+              <button class="save-pill ${this._saveState}" @click=${this._handlePillClick}>
                 ${this._saveState === 'saved'
         ? localize('ui.panel.overview.saved', this.hass)
         : localize('ui.panel.overview.undo', this.hass)}
@@ -107,14 +107,14 @@ export class SchedulerOverviewRow extends LitElement {
 
   private _handleSlotsChanged(ev: CustomEvent, entryIndex: number) {
     ev.stopPropagation();
-    const previousSlots = this.schedule.entries[entryIndex].slots;
-    const slots = ev.detail.slots;
-    this._saveAndSet(entryIndex, slots);
-
-    this._undoSlots = previousSlots;
+    // Capture the pre-change state BEFORE saving, so undo/reset has
+    // something to go back to even if the save itself fails.
+    this._undoSlots = this.schedule.entries[entryIndex].slots;
     this._undoEntryIndex = entryIndex;
     setLastOverviewUndo(() => this._performUndo());
     this._showSaved();
+
+    this._saveAndSet(entryIndex, ev.detail.slots);
   }
 
   private _saveAndSet(entryIndex: number, slots: Timeslot[]) {
@@ -122,14 +122,27 @@ export class SchedulerOverviewRow extends LitElement {
       [entryIndex]: { ...this.schedule.entries[entryIndex], slots },
     });
     const updated: Schedule = { ...this.schedule, entries };
-    saveSchedule(this.hass, updated);
+    // Hold the edit locally too: the backend round-trip is asynchronous, and
+    // without this the bar snaps back to the old slots on the next render.
+    this.schedule = updated;
     this.dispatchEvent(new CustomEvent('scheduleChanged', { detail: { schedule: updated } }));
+    Promise.resolve(saveSchedule(this.hass, updated)).catch(e => {
+      // eslint-disable-next-line no-console
+      console.error('scheduler-card: could not save schedule', e);
+      this._saveState = null;
+    });
   }
 
   private _showSaved() {
     clearTimeout(this._saveStateTimer);
     this._saveState = 'saved';
     this._saveStateTimer = window.setTimeout(() => { this._saveState = 'reset'; }, SAVED_LABEL_MS);
+  }
+
+  private _handlePillClick() {
+    // Only the "reset" state is actionable; while it still reads "saved"
+    // the pill is just a confirmation.
+    if (this._saveState === 'reset') this._performUndo();
   }
 
   private _performUndo() {
@@ -206,23 +219,28 @@ export class SchedulerOverviewRow extends LitElement {
       }
       .save-pill {
         position: absolute;
-        top: -18px;
+        top: 0;
         inset-inline-end: 0;
         font-size: 0.62rem;
         font-family: inherit;
+        line-height: 1;
         color: var(--secondary-text-color);
-        background: none;
-        border: none;
-        padding: 0;
-        cursor: pointer;
+        background: var(--card-background-color);
+        border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
+        border-radius: 10px;
+        padding: 2px 7px;
+        cursor: default;
         z-index: 6;
       }
       .save-pill.saved {
         color: rgb(var(--rgb-state-active-color, 67, 160, 71));
+        border-color: rgba(var(--rgb-state-active-color, 67, 160, 71), 0.5);
         animation: save-pulse 1.6s ease-in-out;
       }
       .save-pill.reset {
-        text-decoration: underline;
+        cursor: pointer;
+        color: var(--primary-color);
+        border-color: rgba(var(--rgb-primary-color, 3, 169, 244), 0.5);
       }
       @keyframes save-pulse {
         0% { opacity: 0.35; }

@@ -33,7 +33,7 @@ const tsLabel = (ts: number, amPm: boolean) => {
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 48; // 1440min / 48 = 30min visible at max zoom
 const MINUTE_DRAG_ZOOM_THRESHOLD = 4; // switch to 1-minute drag snapping once the view is this focused
-const ZOOM_BUTTON_FACTOR = 1.6;
+const ZOOM_BUTTON_FACTOR = 3;
 const ZOOM_ANIMATION_MS = 220;
 
 @customElement('scheduler-timeslot-editor')
@@ -262,7 +262,7 @@ export class SchedulerTimeslotEditor extends LitElement {
         cancelAnimationFrame(this._zoomAnimationFrame);
         this._zoomAnimationFrame = undefined;
       }
-      const factor = Math.pow(2, -ev.deltaY / 300);
+      const factor = Math.pow(2, -ev.deltaY / 60);
       this._setZoom(this._zoom * factor, anchorPx);
     } else {
       this._panPx = this._clampPan(this._panPx + ev.deltaX, this._zoom);

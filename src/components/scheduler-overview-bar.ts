@@ -3,7 +3,8 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { styleMap } from 'lit/directives/style-map.js';
 import { CardConfig, Time, TimeMode, Timeslot } from '../types';
 import { HomeAssistant } from '../lib/types';
-import { isOffAction, isOnAction } from '../data/format/is_off_action';
+import { isOffAction, isOnAction, invertOnOffAction } from '../data/format/is_off_action';
+import { carveTimeslot } from '../data/schedule/carve_timeslot';
 import { computeActionColor } from '../data/format/compute_action_color';
 import { computeSlotWidths } from '../data/time/compute_slot_widths';
 import { computeSlotBoundaries } from '../data/format/compute_slot_boundaries';
@@ -57,6 +58,14 @@ export class SchedulerOverviewBar extends LitElement {
 
   private _bodyResizeDrag?: { startClientX: number; slotIdx: number; active: boolean };
 
+  private _lastSegTap?: { time: number; x: number };
+
+  // Double-click/tap-and-drag carves a new slot out of the existing ones,
+  // the same gesture the full editor uses.
+  private _createDrag?: { ts0: number; active: boolean };
+
+  @state() private _createRange?: { ts0: number; ts1: number };
+
   private _onExternalSelect = (ev: Event) => {
     if ((ev as CustomEvent).detail?.source !== this && this.selectedSlot !== null) {
       this.selectedSlot = null;
@@ -92,7 +101,7 @@ export class SchedulerOverviewBar extends LitElement {
     if (isZoomGesture) {
       // More sensitive than a typical wheel-zoom map so it doesn't take a
       // lot of scrolling to get anywhere.
-      const factor = Math.pow(2, -ev.deltaY / 120);
+      const factor = Math.pow(2, -ev.deltaY / 60);
       this.dispatchEvent(new CustomEvent('overview-zoom', { detail: { anchorPx, factor }, bubbles: true, composed: true }));
     } else {
       this.dispatchEvent(new CustomEvent('overview-pan', { detail: { deltaPx: ev.deltaX }, bubbles: true, composed: true }));
@@ -196,11 +205,20 @@ export class SchedulerOverviewBar extends LitElement {
                       @mousedown=${(ev: MouseEvent) => this._handleDragStart(ev, i)}
                       @touchstart=${(ev: TouchEvent) => this._handleDragStart(ev, i)}
                     >
-                      <span><ha-icon-button .path=${mdiUnfoldMoreVertical}></ha-icon-button></span>
+                      <span><ha-svg-icon .path=${mdiUnfoldMoreVertical}></ha-svg-icon></span>
                     </div>
                   ` : ''}
                 `;
     })}
+              ${this._createRange ? html`
+                <div
+                  class="create-overlay"
+                  style=${styleMap({
+      insetInlineStart: `${(this._createRange.ts0 / SEC_PER_DAY) * this._contentWidth}px`,
+      width: `${((this._createRange.ts1 - this._createRange.ts0) / SEC_PER_DAY) * this._contentWidth}px`,
+    })}
+                ></div>
+              ` : ''}
             </div>
           </div>
         </div>
@@ -220,7 +238,36 @@ export class SchedulerOverviewBar extends LitElement {
   // Pressing down on a slot's body and dragging sideways resizes it from
   // whichever edge the drag moves toward (consuming space from that
   // neighbour); a plain click (no meaningful movement) still selects it.
+  private _clientXToTs(clientX: number) {
+    const bar = this.shadowRoot!.querySelector('.bar') as HTMLElement;
+    const bounds = bar.getBoundingClientRect();
+    const isRtl = getComputedStyle(this).direction === 'rtl';
+    let x = isRtl ? bounds.right - clientX : clientX - bounds.left;
+    if (x < 0) x = 0;
+    if (x > bounds.width) x = bounds.width;
+    const stepSec = this._dragStepSize * 60;
+    return Math.round(Math.round((x / bounds.width) * SEC_PER_DAY) / stepSec) * stepSec;
+  }
+
   private _handleSegPointerDown(ev: PointerEvent, i: number) {
+    if (ev.button !== undefined && ev.button !== 0) return;
+
+    // A second press in quick succession at the same spot starts a
+    // carve-a-new-slot drag; a single press resizes (mouse) or pans (touch).
+    const now = performance.now();
+    const isDouble = this._lastSegTap !== undefined
+      && now - this._lastSegTap.time < 400
+      && Math.abs(ev.clientX - this._lastSegTap.x) < (ev.pointerType === 'touch' ? 50 : 10);
+    this._lastSegTap = { time: now, x: ev.clientX };
+    if (isDouble) {
+      this._startCreateDrag(ev);
+      return;
+    }
+    if (ev.pointerType === 'touch') {
+      this._startTouchPan(ev);
+      return;
+    }
+
     const startClientX = ev.clientX;
     this._bodyResizeDrag = { startClientX, slotIdx: i, active: false };
 
@@ -251,6 +298,74 @@ export class SchedulerOverviewBar extends LitElement {
     window.addEventListener('pointermove', moveHandler);
     window.addEventListener('pointerup', upHandler);
     window.addEventListener('pointercancel', upHandler);
+  }
+
+  // Single-finger drag on the bar pans the zoomed view (the card owns the
+  // shared pan state), leaving double-tap-and-drag free to create a slot.
+  private _startTouchPan(ev: PointerEvent) {
+    let lastX = ev.clientX;
+    const moveHandler = (mv: PointerEvent) => {
+      if (this._pinch) return;
+      const dx = mv.clientX - lastX;
+      lastX = mv.clientX;
+      this.dispatchEvent(new CustomEvent('overview-pan', { detail: { deltaPx: -dx }, bubbles: true, composed: true }));
+    };
+    const upHandler = () => {
+      window.removeEventListener('pointermove', moveHandler);
+      window.removeEventListener('pointerup', upHandler);
+      window.removeEventListener('pointercancel', upHandler);
+    };
+    window.addEventListener('pointermove', moveHandler);
+    window.addEventListener('pointerup', upHandler);
+    window.addEventListener('pointercancel', upHandler);
+  }
+
+  private _startCreateDrag(ev: PointerEvent) {
+    const startClientX = ev.clientX;
+    this._createDrag = { ts0: this._clientXToTs(ev.clientX), active: false };
+
+    const moveHandler = (mv: PointerEvent) => {
+      if (!this._createDrag) return;
+      if (!this._createDrag.active && Math.abs(mv.clientX - startClientX) < 5) return;
+      this._createDrag.active = true;
+      const ts = this._clientXToTs(mv.clientX);
+      this._createRange = {
+        ts0: Math.min(this._createDrag.ts0, ts),
+        ts1: Math.max(this._createDrag.ts0, ts),
+      };
+    };
+    const upHandler = () => {
+      window.removeEventListener('pointermove', moveHandler);
+      window.removeEventListener('pointerup', upHandler);
+      window.removeEventListener('pointercancel', upHandler);
+      const drag = this._createDrag;
+      const range = this._createRange;
+      this._createDrag = undefined;
+      this._createRange = undefined;
+      if (!drag?.active || !range) return;
+      if (range.ts1 - range.ts0 < this._dragStepSize * 60) return;
+      this._commitCreate(range.ts0, range.ts1);
+    };
+    window.addEventListener('pointermove', moveHandler);
+    window.addEventListener('pointerup', upHandler);
+    window.addEventListener('pointercancel', upHandler);
+  }
+
+  private _commitCreate(ts0: number, ts1: number) {
+    let [slots, newIdx] = carveTimeslot(this._slots, ts0, ts1, this.hass);
+    // Default the carved slot to the opposite of a neighbour's on/off action,
+    // so it is immediately meaningful (and saveable) without the full dialog.
+    const reference = [slots[newIdx - 1], slots[newIdx + 1]]
+      .find(s => s?.actions?.length && invertOnOffAction(s.actions[0]) !== null);
+    const defaultAction = reference ? invertOnOffAction(reference.actions[0]) : null;
+    if (!defaultAction) return;
+    slots = Object.assign([...slots], { [newIdx]: { ...slots[newIdx], actions: [defaultAction] } });
+
+    this._liveSlots = slots;
+    this.selectedSlot = newIdx;
+    document.dispatchEvent(new CustomEvent(SELECT_EVENT, { detail: { source: this } }));
+    this.dispatchEvent(new CustomEvent('slot-selected', { detail: { index: newIdx }, bubbles: true, composed: true }));
+    this.dispatchEvent(new CustomEvent('slots-changed', { detail: { slots }, bubbles: true, composed: true }));
   }
 
   private get _dragStepSize() {
@@ -437,19 +552,37 @@ export class SchedulerOverviewBar extends LitElement {
       .handle.hidden {
         visibility: hidden;
       }
+      .create-overlay {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.35);
+        border: 1px solid var(--primary-color);
+        box-sizing: border-box;
+        border-radius: 4px;
+        pointer-events: none;
+        z-index: 6;
+      }
       .handle span {
         background: var(--card-background-color);
+        border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
         border-radius: 50%;
-        width: 10px;
-        height: 10px;
+        width: 12px;
+        height: 12px;
         display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
         z-index: 5;
       }
-      .handle ha-icon-button {
-        --mdc-icon-button-size: 14px;
-        --mdc-icon-size: 9px;
-        margin-top: -2px;
-        margin-inline-start: -2px;
+      .handle:hover span {
+        border-color: var(--primary-color);
+      }
+      .handle ha-svg-icon {
+        --mdc-icon-size: 10px;
+        width: 10px;
+        height: 10px;
+        color: var(--secondary-text-color);
       }
       .handle.center span {
         margin-inline-end: -1px;
