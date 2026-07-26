@@ -6,9 +6,11 @@ import { computeEntityIcon } from '../data/format/compute_entity_icon';
 import { computeEntityDisplay } from '../data/format/compute_entity_display';
 import { computeDomain } from '../lib/entity';
 import { pickEntryForWeekday } from '../data/schedule/pick_entry_for_weekday';
+import { entryAppliesOn } from '../data/schedule/entry_applies_on';
 import { saveSchedule } from '../data/store/save_schedule';
 import { setLastOverviewUndo } from '../lib/overview_undo';
 import { isOnAction, isOffAction } from '../data/format/is_off_action';
+import { mdiContentCopy } from '@mdi/js';
 import { localize } from '../localize/localize';
 
 import './scheduler-overview-bar';
@@ -29,6 +31,10 @@ export class SchedulerOverviewRow extends LitElement {
   @property({ type: Number }) panPx = 0;
   @property({ type: Number }) viewportWidth = 0;
   @property({ type: Boolean }) editable = true;
+  /** Passed through to the bar as the "now" marker (today only). */
+  @property({ attribute: false }) now?: Date;
+  /** 1 = a single day; 2 = this day plus the next, side by side. */
+  @property({ type: Number }) spanDays = 1;
 
   @state() private _saveState: 'saved' | 'reset' | null = null;
 
@@ -47,6 +53,20 @@ export class SchedulerOverviewRow extends LitElement {
       const disabled = ['off', 'completed'].includes(stateObj.state);
 
       const { entry, index: entryIndex } = pickEntryForWeekday(this.schedule.entries, this.date);
+      // A schedule limited to e.g. Fridays still has an entry to draw, but
+      // it does not run on a Tuesday - show that rather than drawing both
+      // cases identically.
+      const baseDate = this.date || new Date();
+      const applies = entryAppliesOn(entry, baseDate);
+
+      // Two-day view: the next day is drawn beside this one, so a schedule
+      // running across midnight can be read in one go. It is a comparison
+      // view - editing stays in the single-day view, where a drag maps to
+      // exactly one day.
+      const nextDate = new Date(baseDate.getTime() + 24 * 3600 * 1000);
+      const next = this.spanDays === 2 ? pickEntryForWeekday(this.schedule.entries, nextDate) : null;
+      const nextApplies = next ? entryAppliesOn(next.entry, nextDate) : false;
+      const halfWidth = this.spanDays === 2 ? Math.max(0, (this.viewportWidth - 6) / 2) : this.viewportWidth;
       const firstAction = entry.slots.find(e => e.actions.length)?.actions[0];
 
       let icon = 'mdi:calendar-clock';
@@ -66,7 +86,7 @@ export class SchedulerOverviewRow extends LitElement {
         : (this.schedule.name || this.schedule.entity_id);
 
       return html`
-        <div class="row ${disabled ? 'disabled' : ''}">
+        <div class="row ${disabled ? 'disabled' : ''} ${applies ? '' : 'not-today'}">
           <div class="device">
             <ha-icon
               icon="${icon}"
@@ -75,6 +95,13 @@ export class SchedulerOverviewRow extends LitElement {
               @click=${this._handleToggle}
             ></ha-icon>
             <span class="label" @click=${this._handleEditClick}>${label}</span>
+            <ha-icon-button
+              class="duplicate"
+              .path=${mdiContentCopy}
+              .label=${localize('ui.panel.overview.duplicate', this.hass)}
+              title=${localize('ui.panel.overview.duplicate', this.hass)}
+              @click=${this._handleDuplicate}
+            ></ha-icon-button>
             ${this._saveState ? html`
               <button
                 class="save-pill ${this._saveState}"
@@ -88,19 +115,32 @@ export class SchedulerOverviewRow extends LitElement {
               </button>
             ` : ''}
           </div>
-          <div class="bar-wrap">
+          <div class="bar-wrap ${this.spanDays === 2 ? 'split' : ''}">
             <scheduler-overview-bar
               .hass=${this.hass}
               .config=${this.config}
               .slots=${entry.slots}
               .zoom=${this.zoom}
               .panPx=${this.panPx}
-              .viewportWidth=${this.viewportWidth}
-              .editable=${this.editable}
+              .viewportWidth=${halfWidth}
+              .editable=${this.editable && this.spanDays === 1}
+              .now=${this.now}
               @slots-changed=${(ev: CustomEvent) => this._handleSlotsChanged(ev, entryIndex)}
               @slot-selected=${this._handleSlotSelected}
             ></scheduler-overview-bar>
-            ${this._renderActionPanel(entry.slots, entryIndex)}
+            ${next ? html`
+              <scheduler-overview-bar
+                class="${nextApplies ? '' : 'not-today'}"
+                .hass=${this.hass}
+                .config=${this.config}
+                .slots=${next.entry.slots}
+                .zoom=${this.zoom}
+                .panPx=${this.panPx}
+                .viewportWidth=${halfWidth}
+                .editable=${false}
+              ></scheduler-overview-bar>
+            ` : ''}
+            ${this.spanDays === 1 ? this._renderActionPanel(entry.slots, entryIndex) : ''}
           </div>
         </div>
       `;
@@ -149,6 +189,15 @@ export class SchedulerOverviewRow extends LitElement {
       new CustomEvent('slots-changed', { detail: { slots: newSlots } }),
       entryIndex
     );
+  }
+
+  /** Saves a copy of this schedule (no schedule_id => the backend creates one). */
+  private _handleDuplicate(ev: Event) {
+    ev.stopPropagation();
+    const copy = { ...this.schedule } as Partial<Schedule>;
+    delete copy.schedule_id;
+    delete copy.entity_id;
+    saveSchedule(this.hass, copy as Schedule);
   }
 
   private _handleToggle(ev: Event) {
@@ -284,6 +333,22 @@ export class SchedulerOverviewRow extends LitElement {
       .label:hover {
         text-decoration: underline;
       }
+      .row.not-today .bar-wrap,
+      .row.not-today .device {
+        opacity: 0.45;
+      }
+      ha-icon-button.duplicate {
+        flex: 0 0 auto;
+        --mdc-icon-button-size: 26px;
+        --mdc-icon-size: 15px;
+        color: var(--secondary-text-color);
+        opacity: 0;
+        transition: opacity 0.12s ease-in-out;
+      }
+      .row:hover ha-icon-button.duplicate,
+      ha-icon-button.duplicate:focus-visible {
+        opacity: 1;
+      }
       .row.disabled ha-icon,
       .row.disabled .label {
         color: var(--disabled-text-color);
@@ -292,6 +357,18 @@ export class SchedulerOverviewRow extends LitElement {
         flex: 1;
         min-width: 0;
         position: relative;
+      }
+      .bar-wrap.split {
+        display: flex;
+        align-items: flex-end;
+        gap: 6px;
+      }
+      .bar-wrap.split scheduler-overview-bar {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+      .bar-wrap.split scheduler-overview-bar.not-today {
+        opacity: 0.45;
       }
       .row.disabled .bar-wrap {
         opacity: 0.5;

@@ -26,6 +26,9 @@ export class SchedulerOverviewRuler extends LitElement {
   @property({ type: Number }) public panPx = 0;
   @property({ type: Number }) public minZoom = 1;
   @property({ type: Number }) public maxZoom = 48;
+  /** 1 = a single day; 2 = two consecutive days side by side. */
+  @property({ type: Number }) public spanDays = 1;
+  @property({ attribute: false }) public dayLabels?: string[];
 
   @state() private _width = 0;
 
@@ -70,7 +73,7 @@ export class SchedulerOverviewRuler extends LitElement {
   }
 
   private _handleWheel(ev: WheelEvent) {
-    if (!this._width) return;
+    if (!this._width || this.spanDays === 2) return;
     const isZoomGesture = ev.ctrlKey || ev.metaKey || Math.abs(ev.deltaY) >= Math.abs(ev.deltaX);
     ev.preventDefault();
     const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
@@ -135,16 +138,20 @@ export class SchedulerOverviewRuler extends LitElement {
   render() {
     if (!this.hass) return html``;
     const amPm = useAmPm(this.hass.locale);
-    const ticks = computeHourTicks(this._contentWidth, amPm);
+    const ticks = this.spanDays === 2
+      ? [...computeHourTicks(this._contentWidth / 2, amPm), ...computeHourTicks(this._contentWidth / 2, amPm)]
+        .map(t => ({ ...t, widthPct: t.widthPct / 2 }))
+      : computeHourTicks(this._contentWidth, amPm);
     const zoomPct = Math.round(this.zoom * 100);
     // Highlight whichever tick is closest to the current time (e.g. 13:20
     // highlights the 14:00 tick), so the ruler doubles as a "where are we
     // now" reference.
-    const nearestHour = this.now !== undefined
+    const nearestHour = this.now !== undefined && this.spanDays === 1
       ? Math.round(this.now.getHours() + this.now.getMinutes() / 60) % 24
       : null;
 
     return html`
+      ${this.spanDays === 2 ? '' : html`
       <div class="zoom-controls">
         <ha-icon-button
           .disabled=${this.zoom <= this.minZoom}
@@ -159,7 +166,7 @@ export class SchedulerOverviewRuler extends LitElement {
         >
           <ha-icon icon="mdi:magnify-plus-outline"></ha-icon>
         </ha-icon-button>
-      </div>
+      </div>`}
       <div
         class="viewport"
         @wheel=${this._handleWheel}
@@ -178,6 +185,11 @@ export class SchedulerOverviewRuler extends LitElement {
           @pointercancel=${this._handlePanEnd}
         >
           <div class="ruler" style=${styleMap({ width: `${this._contentWidth}px`, transform: `translateX(${-this.panPx}px)` })}>
+            ${this.spanDays === 2
+        ? html`<div class="day-split">
+                ${(this.dayLabels || []).map(l => html`<span class="day-name">${l}</span>`)}
+              </div>`
+        : ''}
             ${ticks.map(tick => {
       const time: Time = { mode: TimeMode.Fixed, hours: tick.hour, minutes: 0 };
       const label = timeToString(time, { seconds: false, am_pm: amPm });
@@ -249,6 +261,20 @@ export class SchedulerOverviewRuler extends LitElement {
       }
       .ruler span.right {
         justify-content: flex-end;
+      }
+      .day-split {
+        position: absolute;
+        top: -13px;
+        inset-inline-start: 0;
+        width: 100%;
+        display: flex;
+        pointer-events: none;
+      }
+      .day-split .day-name {
+        flex: 1 1 50%;
+        justify-content: center;
+        font-weight: 600;
+        color: var(--primary-text-color);
       }
       .ruler span.now {
         font-weight: 700;

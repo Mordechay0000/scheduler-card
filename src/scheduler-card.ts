@@ -24,6 +24,7 @@ import "./components/scheduler-item-row";
 import "./components/scheduler-overview-row";
 import "./components/scheduler-overview-ruler";
 import "./components/scheduler-overview-add-row";
+import "./components/scheduler-overview-daybar";
 import { entityIncludedByConfig } from "./data/actions/entity_included_by_config";
 import { mdiViewDayOutline, mdiViewSequentialOutline } from "@mdi/js";
 import { consumeLastOverviewUndo } from "./lib/overview_undo";
@@ -66,6 +67,22 @@ export class SchedulerCard extends LitElement {
   private _overviewZoomAnimationFrame?: number;
 
   @state() private _now = new Date();
+
+  /** Which day the overview is showing, and whether the next day is shown too. */
+  @state() private _viewDate: Date = new Date();
+
+  @state() private _spanDays = 1;
+
+  private get _isToday() {
+    const a = new Date(this._viewDate); a.setHours(0, 0, 0, 0);
+    const b = new Date(); b.setHours(0, 0, 0, 0);
+    return a.getTime() === b.getTime();
+  }
+
+  private _dayLabel(offset: number) {
+    const d = new Date(this._viewDate.getTime() + offset * 24 * 3600 * 1000);
+    return d.toLocaleDateString(this.hass?.locale?.language || undefined, { weekday: 'long' });
+  }
 
   private _clockInterval?: number;
 
@@ -234,9 +251,22 @@ export class SchedulerCard extends LitElement {
 
     ${this.overviewMode && !this.connectionError && (includedItems.length || this._quickAddEnabled)
         ? html`
+          <scheduler-overview-daybar
+            .hass=${this.hass}
+            .date=${this._viewDate}
+            .spanDays=${this._spanDays}
+            @date-changed=${(ev: CustomEvent) => { this._viewDate = ev.detail.date; }}
+            @span-changed=${(ev: CustomEvent) => {
+        this._spanDays = ev.detail.spanDays;
+        this._overviewZoom = OVERVIEW_MIN_ZOOM;
+        this._overviewPanPx = 0;
+      }}
+          ></scheduler-overview-daybar>
           <scheduler-overview-ruler
             .hass=${this.hass}
-            .now=${this._now}
+            .now=${this._isToday ? this._now : undefined}
+            .spanDays=${this._spanDays}
+            .dayLabels=${[this._dayLabel(0), this._dayLabel(1)]}
             .zoom=${this._overviewZoom}
             .panPx=${this._overviewPanPx}
             .minZoom=${OVERVIEW_MIN_ZOOM}
@@ -407,6 +437,9 @@ export class SchedulerCard extends LitElement {
           .panPx=${this._overviewPanPx}
           .viewportWidth=${this._overviewViewportWidth}
           .editable=${this._overviewEditingEnabled}
+          .date=${this._viewDate}
+          .spanDays=${this._spanDays}
+          .now=${this._isToday && this._spanDays === 1 ? this._now : undefined}
           @editClick=${(ev: Event) => { this._handleEditClick(ev, scheduleItem) }}
         >
         </scheduler-overview-row>

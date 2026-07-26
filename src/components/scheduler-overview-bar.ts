@@ -41,6 +41,8 @@ export class SchedulerOverviewBar extends LitElement {
   @property({ type: Number }) public panPx = 0;
   @property({ type: Number }) public viewportWidth = 0;
   @property({ type: Boolean }) public editable = true;
+  /** Draws a "now" marker across the bar; omit when not showing today. */
+  @property({ attribute: false }) public now?: Date;
 
   @state() private selectedSlot: number | null = null;
 
@@ -92,11 +94,18 @@ export class SchedulerOverviewBar extends LitElement {
   // neighbours with identical effects they collapse into one.
   private _handleKeyDown = (ev: KeyboardEvent) => {
     if (!this.editable) return;
-    if (ev.key !== 'Delete' && ev.key !== 'Backspace') return;
     if (this.selectedSlot === null) return;
+    const isArrow = ev.key === 'ArrowLeft' || ev.key === 'ArrowRight';
+    if (ev.key !== 'Delete' && ev.key !== 'Backspace' && !isArrow) return;
     const origin = ev.composedPath()[0];
     if (origin instanceof HTMLElement
       && (['input', 'textarea', 'select'].includes(origin.tagName.toLowerCase()) || origin.isContentEditable)) return;
+
+    if (isArrow) {
+      ev.preventDefault();
+      this._nudgeSelected(ev.key === 'ArrowRight' ? 1 : -1);
+      return;
+    }
 
     const slots = this._slots;
     // Never leave the bar with fewer than two slots, and leave schedules
@@ -120,6 +129,41 @@ export class SchedulerOverviewBar extends LitElement {
     this.dispatchEvent(new CustomEvent('slots-changed', { detail: { slots: newSlots }, bubbles: true, composed: true }));
   };
 
+  /**
+   * Moves the selected slot's boundary by one step, for precise adjustment
+   * without dragging. Directions are visual: under RTL, "right" is earlier.
+   */
+  private _nudgeSelected(direction: 1 | -1) {
+    const slots = this._slots;
+    const i = this.selectedSlot!;
+    const isRtl = getComputedStyle(this).direction === 'rtl';
+    const later = isRtl ? direction < 0 : direction > 0;
+
+    // Adjust the boundary at the visual edge the key points at: the slot's
+    // own stop, or - for the last slot - its start.
+    const boundaryIdx = i < slots.length - 1 ? i : i - 1;
+    if (boundaryIdx < 0 || !slots[boundaryIdx]?.stop || !slots[boundaryIdx + 1]) return;
+    if ([TimeMode.Sunrise, TimeMode.Sunset].includes(parseTimeString(slots[boundaryIdx + 1].start).mode)) return;
+
+    const stepSec = this._dragStepSize * 60;
+    const current = computeTimestamp(slots[boundaryIdx].stop!, this.hass);
+    const min = boundaryIdx > 0 ? computeTimestamp(slots[boundaryIdx - 1].stop || slots[boundaryIdx - 1].start, this.hass) + stepSec : stepSec;
+    const maxRef = computeTimestamp(slots[boundaryIdx + 1].stop || slots[boundaryIdx + 1].start, this.hass) || SEC_PER_DAY;
+    const max = maxRef - stepSec;
+
+    const ts = Math.min(Math.max(current + (later ? stepSec : -stepSec), min), max);
+    if (ts === current) return;
+
+    const time: Time = { mode: TimeMode.Fixed, hours: Math.floor(ts / 3600), minutes: Math.round((ts % 3600) / 60) };
+    const timeStr = timeToString(roundTime(time, this._dragStepSize));
+    const newSlots = Object.assign([...slots], {
+      [boundaryIdx]: { ...slots[boundaryIdx], stop: timeStr },
+      [boundaryIdx + 1]: { ...slots[boundaryIdx + 1], start: timeStr },
+    });
+    this._liveSlots = newSlots;
+    this.dispatchEvent(new CustomEvent('slots-changed', { detail: { slots: newSlots }, bubbles: true, composed: true }));
+  }
+
   updated(changed: Map<string, unknown>) {
     if (changed.has('slots')) this._liveSlots = undefined;
     // Restore the true reading direction on the content (the .viewport
@@ -129,7 +173,7 @@ export class SchedulerOverviewBar extends LitElement {
   }
 
   private _handleWheel(ev: WheelEvent) {
-    if (!this.viewportWidth) return;
+    if (!this.viewportWidth || !this.editable) return;
     const isZoomGesture = ev.ctrlKey || ev.metaKey || Math.abs(ev.deltaY) >= Math.abs(ev.deltaX);
     ev.preventDefault();
     const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
@@ -247,6 +291,14 @@ export class SchedulerOverviewBar extends LitElement {
                   ` : ''}
                 `;
     })}
+              ${this.now !== undefined ? html`
+                <div
+                  class="now-line"
+                  style=${styleMap({
+      insetInlineStart: `${((this.now.getHours() * 3600 + this.now.getMinutes() * 60 + this.now.getSeconds()) / SEC_PER_DAY) * this._contentWidth}px`,
+    })}
+                ></div>
+              ` : ''}
               ${this._createRange ? html`
                 <div
                   class="create-overlay"
@@ -606,6 +658,27 @@ export class SchedulerOverviewBar extends LitElement {
       }
       .handle.hidden {
         visibility: hidden;
+      }
+      .now-line {
+        position: absolute;
+        top: -3px;
+        bottom: -3px;
+        width: 2px;
+        margin-inline-start: -1px;
+        background: var(--primary-color);
+        border-radius: 1px;
+        pointer-events: none;
+        z-index: 5;
+      }
+      .now-line::before {
+        content: '';
+        position: absolute;
+        top: -3px;
+        inset-inline-start: -2px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--primary-color);
       }
       .create-overlay {
         position: absolute;

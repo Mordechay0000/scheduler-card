@@ -140,7 +140,10 @@
         "brightness": "Brightness",
         "color_temp": "Color temp",
         "color": "Color",
-        "reset_hint": "Undo all changes made since the card was opened"
+        "reset_hint": "Undo all changes made since the card was opened",
+        "today": "Today",
+        "two_days": "2 days",
+        "duplicate": "Duplicate schedule"
       },
       "editor": {
         "repeated_days": "Herhaling",
