@@ -128,7 +128,19 @@
         "backend_error": "Не може да се свърже с компонента за планиране. Той трябва да бъде инсталиран като интеграция, преди тази карта да може да се използва.",
         "excluded_items": "{number} изключен {if number is 1} елемент {else} елемента",
         "hide_excluded": "скрий изключените елементи",
-        "additional_tasks": "{number} още {if number is 1} задача {else} задачи"
+        "additional_tasks": "{number} още {if number is 1} задача {else} задачи",
+        "overview_view": "Show timeline overview",
+        "list_view": "Show list view",
+        "tap_icon_to_toggle": "Tap to turn on/off",
+        "saved": "Saved",
+        "undo": "Undo",
+        "add_schedule": "Add schedule",
+        "turn_on": "On",
+        "turn_off": "Off",
+        "brightness": "Brightness",
+        "color_temp": "Color temp",
+        "color": "Color",
+        "reset_hint": "Undo all changes made since the card was opened"
       },
       "editor": {
         "repeated_days": "Повтарящи се дни",
@@ -246,6 +258,25 @@
             "heading": "Включени обекти",
             "description": "Изберете обектите, които искате да контролирате чрез планировчика. Можете да кликнете на група, за да я отворите. Имайте предвид, че някои обекти (като сензори) могат да се използват само за условия, не и за действия.",
             "included_number": "{number}/{total} избрани"
+          },
+          "default_view": {
+            "heading": "Default view",
+            "options": {
+              "overview": "Timeline overview",
+              "list": "List"
+            }
+          },
+          "show_view_toggle": {
+            "heading": "Show view switcher"
+          },
+          "show_clock": {
+            "heading": "Show clock in header"
+          },
+          "overview_editing": {
+            "heading": "Edit from the timeline"
+          },
+          "show_quick_add": {
+            "heading": "Quick add row"
           }
         }
       }

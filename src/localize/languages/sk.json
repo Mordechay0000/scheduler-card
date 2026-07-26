@@ -128,7 +128,19 @@
         "backend_error": "Nepodarilo sa pripojiť ku komponentu Scheduler. Pred tým, ako použijete túto kartu ho musíte nainštalovať ako integráciu.",
         "excluded_items": "Vylúčené položky: {number}",
         "hide_excluded": "skryť vylúčené položky",
-        "additional_tasks": "Ďalšie úlohy: {number}"
+        "additional_tasks": "Ďalšie úlohy: {number}",
+        "overview_view": "Show timeline overview",
+        "list_view": "Show list view",
+        "tap_icon_to_toggle": "Tap to turn on/off",
+        "saved": "Saved",
+        "undo": "Undo",
+        "add_schedule": "Add schedule",
+        "turn_on": "On",
+        "turn_off": "Off",
+        "brightness": "Brightness",
+        "color_temp": "Color temp",
+        "color": "Color",
+        "reset_hint": "Undo all changes made since the card was opened"
       },
       "editor": {
         "repeated_days": "Dni opakovania",
@@ -246,6 +258,25 @@
             "heading": "Zahrnuté entity",
             "description": "Vyberte entity, ktoré chcete ovládať pomocou plánovača. Kliknutím na skupinu ju otvoríte. Upozorňujeme, že niektoré entity (napríklad senzory) možno použiť iba na podmienky, nie na akcie.",
             "included_number": "{number}/{total} vybraný"
+          },
+          "default_view": {
+            "heading": "Default view",
+            "options": {
+              "overview": "Timeline overview",
+              "list": "List"
+            }
+          },
+          "show_view_toggle": {
+            "heading": "Show view switcher"
+          },
+          "show_clock": {
+            "heading": "Show clock in header"
+          },
+          "overview_editing": {
+            "heading": "Edit from the timeline"
+          },
+          "show_quick_add": {
+            "heading": "Quick add row"
           }
         }
       }

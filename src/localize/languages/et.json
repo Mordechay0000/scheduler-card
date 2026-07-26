@@ -128,7 +128,19 @@
         "backend_error": "Ajastaja sidumine puudub. Sidumine tuleb luua enne selle kaardi kasutamist.",
         "excluded_items": "välja on jäetud {number}  {if number is 1} ajastus {else} ajastust",
         "hide_excluded": "peida välja jäetud ajastused",
-        "additional_tasks": "veel {number} {if number is 1} ajastus {else} ajastust"
+        "additional_tasks": "veel {number} {if number is 1} ajastus {else} ajastust",
+        "overview_view": "Show timeline overview",
+        "list_view": "Show list view",
+        "tap_icon_to_toggle": "Tap to turn on/off",
+        "saved": "Saved",
+        "undo": "Undo",
+        "add_schedule": "Add schedule",
+        "turn_on": "On",
+        "turn_off": "Off",
+        "brightness": "Brightness",
+        "color_temp": "Color temp",
+        "color": "Color",
+        "reset_hint": "Undo all changes made since the card was opened"
       },
       "editor": {
         "repeated_days": "Repeated days",
@@ -246,6 +258,25 @@
             "heading": "Included entities",
             "description": "Select the entities that you want to control using the scheduler. You can click on a group to open it. Note that some entities (such as sensors) can only be used for conditions, not for actions.",
             "included_number": "{number}/{total} selected"
+          },
+          "default_view": {
+            "heading": "Default view",
+            "options": {
+              "overview": "Timeline overview",
+              "list": "List"
+            }
+          },
+          "show_view_toggle": {
+            "heading": "Show view switcher"
+          },
+          "show_clock": {
+            "heading": "Show clock in header"
+          },
+          "overview_editing": {
+            "heading": "Edit from the timeline"
+          },
+          "show_quick_add": {
+            "heading": "Quick add row"
           }
         }
       }

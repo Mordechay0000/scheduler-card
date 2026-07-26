@@ -128,7 +128,19 @@
         "backend_error": "Δεν είναι δυνατή η σύνδεη με το scheduler component. Πρέπει να εγκατασταθεί σαν integration πριν την χρήση αυτής της κάρτας.",
         "excluded_items": "{number} {if number is 1} εξαιρούμενο αντικείμενο {else} εξαιρούμενα αντικείμενα",
         "hide_excluded": "απόκρυψη εξαιρούμενων αντικειμένων",
-        "additional_tasks": "{number} επιπλέον {if number is 1} εργασία {else} εργασίες"
+        "additional_tasks": "{number} επιπλέον {if number is 1} εργασία {else} εργασίες",
+        "overview_view": "Show timeline overview",
+        "list_view": "Show list view",
+        "tap_icon_to_toggle": "Tap to turn on/off",
+        "saved": "Saved",
+        "undo": "Undo",
+        "add_schedule": "Add schedule",
+        "turn_on": "On",
+        "turn_off": "Off",
+        "brightness": "Brightness",
+        "color_temp": "Color temp",
+        "color": "Color",
+        "reset_hint": "Undo all changes made since the card was opened"
       },
       "editor": {
         "repeated_days": "Επαναλαμβανόμενες ημέρες",
@@ -246,6 +258,25 @@
             "heading": "Συμπεριλαμβανόμενες οντότητες",
             "description": "Επιλέξτε τις οντότητες που θέλετε να ελέγχετε μέσω του χρονοπρογραμματιστή. Μπορείτε να κάνετε κλικ σε μια ομάδα για να την ανοίξετε. Λάβετε υπόψη ότι ορισμένες οντότητες (όπως αισθητήρες) μπορούν να χρησιμοποιηθούν μόνο για συνθήκες και όχι για ενέργειες.",
             "included_number": "{number}/{total} επιλεγμένες"
+          },
+          "default_view": {
+            "heading": "Default view",
+            "options": {
+              "overview": "Timeline overview",
+              "list": "List"
+            }
+          },
+          "show_view_toggle": {
+            "heading": "Show view switcher"
+          },
+          "show_clock": {
+            "heading": "Show clock in header"
+          },
+          "overview_editing": {
+            "heading": "Edit from the timeline"
+          },
+          "show_quick_add": {
+            "heading": "Quick add row"
           }
         }
       }

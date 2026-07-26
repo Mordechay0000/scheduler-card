@@ -44,6 +44,16 @@ export const validateConfig = (config: any) => {
     errors.push(`'show_toggle_switches' must be a boolean`);
   }
 
+  if (hasKey(config, 'default_view') && !['overview', 'list'].includes(config.default_view)) {
+    errors.push(`'default_view' must be either 'overview' or 'list'`);
+  }
+
+  for (const key of ['show_view_toggle', 'show_clock', 'overview_editing', 'show_quick_add']) {
+    if (hasKey(config, key) && !isTypeBoolean(config[key])) {
+      errors.push(`'${key}' must be a boolean`);
+    }
+  }
+
   if (hasKey(config, 'display_options')) {
     if (!isTypeObject(config.display_options)) {
       errors.push(`'display_options' must be a struct`);

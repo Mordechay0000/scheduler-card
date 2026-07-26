@@ -40,6 +40,7 @@ export class SchedulerOverviewBar extends LitElement {
   @property({ type: Number }) public zoom = 1;
   @property({ type: Number }) public panPx = 0;
   @property({ type: Number }) public viewportWidth = 0;
+  @property({ type: Boolean }) public editable = true;
 
   @state() private selectedSlot: number | null = null;
 
@@ -90,6 +91,7 @@ export class SchedulerOverviewBar extends LitElement {
   // editor: its range is merged into a neighbour, and if that leaves two
   // neighbours with identical effects they collapse into one.
   private _handleKeyDown = (ev: KeyboardEvent) => {
+    if (!this.editable) return;
     if (ev.key !== 'Delete' && ev.key !== 'Backspace') return;
     if (this.selectedSlot === null) return;
     const origin = ev.composedPath()[0];
@@ -97,11 +99,14 @@ export class SchedulerOverviewBar extends LitElement {
       && (['input', 'textarea', 'select'].includes(origin.tagName.toLowerCase()) || origin.isContentEditable)) return;
 
     const slots = this._slots;
+    // Never leave the bar with fewer than two slots, and leave schedules
+    // that use open-ended slots (single-timer style) to the full dialog -
+    // merging those would need a stop time that does not exist.
     if (slots.length <= 2) return;
-    ev.preventDefault();
-
     const slotIdx = this.selectedSlot;
     const cutIndex = slotIdx === slots.length - 1 ? slotIdx - 1 : slotIdx;
+    if (slots[cutIndex]?.stop === undefined || slots[cutIndex + 1]?.stop === undefined) return;
+    ev.preventDefault();
     let newSlots = [
       ...slots.slice(0, cutIndex),
       { ...slots[cutIndex + 1], start: slots[cutIndex].start, stop: slots[cutIndex + 1].stop! },
@@ -292,7 +297,7 @@ export class SchedulerOverviewBar extends LitElement {
       && Math.abs(ev.clientX - this._lastSegTap.x) < (ev.pointerType === 'touch' ? 50 : 10);
     this._lastSegTap = { time: now, x: ev.clientX };
     if (isDouble) {
-      this._startCreateDrag(ev);
+      if (this.editable) this._startCreateDrag(ev);
       return;
     }
     if (ev.pointerType === 'touch') {
@@ -301,6 +306,7 @@ export class SchedulerOverviewBar extends LitElement {
     }
 
     const startClientX = ev.clientX;
+    if (!this.editable) { this._selectSlot(ev, i); return; }
     this._bodyResizeDrag = { startClientX, slotIdx: i, active: false };
 
     const moveHandler = (mv: PointerEvent) => {
@@ -414,6 +420,7 @@ export class SchedulerOverviewBar extends LitElement {
   }
 
   private _startBoundaryDrag(slotIdx: number) {
+    if (!this.editable) return;
     const slots = this._slots;
     // Only fixed-time boundaries support quick dragging here; sunrise/sunset
     // offsets need the full dialog.

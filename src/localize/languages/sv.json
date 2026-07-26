@@ -128,7 +128,19 @@
         "backend_error": "Kunde inte ansluta till schemaläggarkomponenten. Den måste installeras som integration innan det här kortet kan användas.",
         "excluded_items": "{number} utesluten {if number is 1} artikel {else} artiklar",
         "hide_excluded": "dölj uteslutna objekt",
-        "additional_tasks": "{number} mer {if number is 1} uppgift {else} uppgifter"
+        "additional_tasks": "{number} mer {if number is 1} uppgift {else} uppgifter",
+        "overview_view": "Show timeline overview",
+        "list_view": "Show list view",
+        "tap_icon_to_toggle": "Tap to turn on/off",
+        "saved": "Saved",
+        "undo": "Undo",
+        "add_schedule": "Add schedule",
+        "turn_on": "On",
+        "turn_off": "Off",
+        "brightness": "Brightness",
+        "color_temp": "Color temp",
+        "color": "Color",
+        "reset_hint": "Undo all changes made since the card was opened"
       },
       "editor": {
         "repeated_days": "Upprepade dagar",
@@ -246,6 +258,25 @@
             "heading": "Inkluderade enheter",
             "description": "Välj de enheter som du vill styra med hjälp av schemaläggaren. Du kan klicka på en grupp för att öppna den. Observera att vissa enheter (t.ex. sensorer) bara kan användas för villkor, inte för åtgärder.",
             "included_number": "{number}/{total} vald"
+          },
+          "default_view": {
+            "heading": "Default view",
+            "options": {
+              "overview": "Timeline overview",
+              "list": "List"
+            }
+          },
+          "show_view_toggle": {
+            "heading": "Show view switcher"
+          },
+          "show_clock": {
+            "heading": "Show clock in header"
+          },
+          "overview_editing": {
+            "heading": "Edit from the timeline"
+          },
+          "show_quick_add": {
+            "heading": "Quick add row"
           }
         }
       }

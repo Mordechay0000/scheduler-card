@@ -3,7 +3,7 @@ import { customElement, property, state } from "lit/decorators";
 import { DialogSelectEntitiesParams } from "./dialogs/dialog-select-entities";
 import { HomeAssistant } from "./lib/types";
 import { localize } from "./localize/localize";
-import { CardConfig, EditorMode } from "./types";
+import { CardConfig, EditorMode, OverviewView } from "./types";
 import { fireEvent } from "./lib/fire_event";
 import { NumberSelector, SelectSelector } from "./lib/selector";
 import { fetchTags } from "./data/store/fetch_tags";
@@ -125,6 +125,71 @@ export class SchedulerCardEditor extends LitElement {
             ></ha-switch>
           </ha-formfield>
         </div>
+        </div>
+
+        <span>${localize('ui.panel.card_editor.fields.default_view.heading', this.hass)}</span>
+        <div class="two-columns">
+          <div class="column radio"
+            @click=${() => { this._updateConfig({ default_view: OverviewView.Overview }) }}
+          >
+            <ha-icon
+              icon="${this._config.default_view !== OverviewView.List ? 'mdi:radiobox-marked' : 'mdi:radiobox-blank'}"
+              class="${this._config.default_view !== OverviewView.List ? 'checked' : ''}"
+            ></ha-icon>
+            <span>${localize('ui.panel.card_editor.fields.default_view.options.overview', this.hass)}</span>
+          </div>
+          <div class="column radio"
+            @click=${() => { this._updateConfig({ default_view: OverviewView.List }) }}
+          >
+            <ha-icon
+              icon="${this._config.default_view === OverviewView.List ? 'mdi:radiobox-marked' : 'mdi:radiobox-blank'}"
+              class="${this._config.default_view === OverviewView.List ? 'checked' : ''}"
+            ></ha-icon>
+            <span>${localize('ui.panel.card_editor.fields.default_view.options.list', this.hass)}</span>
+          </div>
+        </div>
+
+        <div class="two-columns" style="margin: 10px 0px 15px 0px">
+          <div class="column">
+            <ha-formfield label="${localize('ui.panel.card_editor.fields.show_view_toggle.heading', this.hass)}">
+              <ha-switch
+                ?checked=${this._config.show_view_toggle !== false}
+                @change=${(ev: Event) => {
+        this._updateConfig({ show_view_toggle: (ev.target as HTMLInputElement).checked });
+      }}
+              ></ha-switch>
+            </ha-formfield>
+          </div>
+          <div class="column">
+            <ha-formfield label="${localize('ui.panel.card_editor.fields.show_clock.heading', this.hass)}">
+              <ha-switch
+                ?checked=${this._config.show_clock !== false}
+                @change=${(ev: Event) => {
+        this._updateConfig({ show_clock: (ev.target as HTMLInputElement).checked });
+      }}
+              ></ha-switch>
+            </ha-formfield>
+          </div>
+          <div class="column">
+            <ha-formfield label="${localize('ui.panel.card_editor.fields.overview_editing.heading', this.hass)}">
+              <ha-switch
+                ?checked=${this._config.overview_editing !== false}
+                @change=${(ev: Event) => {
+        this._updateConfig({ overview_editing: (ev.target as HTMLInputElement).checked });
+      }}
+              ></ha-switch>
+            </ha-formfield>
+          </div>
+          <div class="column">
+            <ha-formfield label="${localize('ui.panel.card_editor.fields.show_quick_add.heading', this.hass)}">
+              <ha-switch
+                ?checked=${this._config.show_quick_add !== false}
+                @change=${(ev: Event) => {
+        this._updateConfig({ show_quick_add: (ev.target as HTMLInputElement).checked });
+      }}
+              ></ha-switch>
+            </ha-formfield>
+          </div>
         </div>
 
         <scheduler-settings-row>

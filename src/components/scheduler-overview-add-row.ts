@@ -41,6 +41,7 @@ export class SchedulerOverviewAddRow extends LitElement {
   @property({ type: Number }) zoom = 1;
   @property({ type: Number }) panPx = 0;
   @property({ type: Number }) viewportWidth = 0;
+  @property({ type: Boolean }) editable = true;
 
   @state() private _picking = false;
   @state() private _entityId: string | null = null;
@@ -153,6 +154,7 @@ export class SchedulerOverviewAddRow extends LitElement {
               .zoom=${this.zoom}
               .panPx=${this.panPx}
               .viewportWidth=${this.viewportWidth}
+              .editable=${this.editable}
               @slots-changed=${this._handleSlotsChanged}
               @slot-selected=${this._handleSlotSelected}
             ></scheduler-overview-bar>

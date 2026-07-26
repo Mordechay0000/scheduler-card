@@ -128,7 +128,19 @@
         "backend_error": "No s'ha pogut connectar amb el component scheduler. Cal instal·lar-lo com a integració abans de fer servir aquesta targeta.",
         "excluded_items": "{number} {if number is 1} element exclòs {else} elements exclosos",
         "hide_excluded": "amaga els elements exclosos",
-        "additional_tasks": "{number} {if number is 1} tasca més {else} tasques més"
+        "additional_tasks": "{number} {if number is 1} tasca més {else} tasques més",
+        "overview_view": "Show timeline overview",
+        "list_view": "Show list view",
+        "tap_icon_to_toggle": "Tap to turn on/off",
+        "saved": "Saved",
+        "undo": "Undo",
+        "add_schedule": "Add schedule",
+        "turn_on": "On",
+        "turn_off": "Off",
+        "brightness": "Brightness",
+        "color_temp": "Color temp",
+        "color": "Color",
+        "reset_hint": "Undo all changes made since the card was opened"
       },
       "editor": {
         "repeated_days": "Dies repetits",
@@ -246,6 +258,25 @@
             "heading": "Entitats incloses",
             "description": "Selecciona les entitats que vols controlar amb el programador. Pots fer clic a un grup per obrir-lo. Tingues en compte que algunes entitats, com ara els sensors, només es poden fer servir per a condicions, no per a accions.",
             "included_number": "{number}/{total} seleccionades"
+          },
+          "default_view": {
+            "heading": "Default view",
+            "options": {
+              "overview": "Timeline overview",
+              "list": "List"
+            }
+          },
+          "show_view_toggle": {
+            "heading": "Show view switcher"
+          },
+          "show_clock": {
+            "heading": "Show clock in header"
+          },
+          "overview_editing": {
+            "heading": "Edit from the timeline"
+          },
+          "show_quick_add": {
+            "heading": "Quick add row"
           }
         }
       }

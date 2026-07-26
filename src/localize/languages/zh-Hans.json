@@ -128,7 +128,19 @@
         "backend_error": "计划任务组件关联失败。使用本卡片前，需先安装计划任务组件（Scheduler component）集成.",
         "excluded_items": "其他{number}项{if number is 1}任务{else}任务",
         "hide_excluded": "隐藏其他任务",
-        "additional_tasks": "另有{number}项{if number is 1}任务{else}任务"
+        "additional_tasks": "另有{number}项{if number is 1}任务{else}任务",
+        "overview_view": "Show timeline overview",
+        "list_view": "Show list view",
+        "tap_icon_to_toggle": "Tap to turn on/off",
+        "saved": "Saved",
+        "undo": "Undo",
+        "add_schedule": "Add schedule",
+        "turn_on": "On",
+        "turn_off": "Off",
+        "brightness": "Brightness",
+        "color_temp": "Color temp",
+        "color": "Color",
+        "reset_hint": "Undo all changes made since the card was opened"
       },
       "editor": {
         "repeated_days": "重复周期",
@@ -246,6 +258,25 @@
             "heading": "包含的实体",
             "description": "选择您希望通过计划任务控制的实体。您可以点击一个分组将其展开。请注意，部分实体（例如传感器）只能用作触发条件，而不能作为执行动作。",
             "included_number": "已选择 {number}/{total}"
+          },
+          "default_view": {
+            "heading": "Default view",
+            "options": {
+              "overview": "Timeline overview",
+              "list": "List"
+            }
+          },
+          "show_view_toggle": {
+            "heading": "Show view switcher"
+          },
+          "show_clock": {
+            "heading": "Show clock in header"
+          },
+          "overview_editing": {
+            "heading": "Edit from the timeline"
+          },
+          "show_quick_add": {
+            "heading": "Quick add row"
           }
         }
       }

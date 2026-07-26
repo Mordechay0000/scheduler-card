@@ -4,7 +4,7 @@ import { customElement, property, state } from "lit/decorators";
 import { SchedulerDialogParams } from "./dialogs/dialog-scheduler-editor";
 import { fetchItems } from "./data/store/fetch_items";
 import { UnsubscribeFunc } from "home-assistant-js-websocket";
-import { CardConfig, CustomConfig, EditorMode, Schedule, SchedulerEventData, ScheduleStorageEntry } from "./types";
+import { CardConfig, CustomConfig, EditorMode, OverviewView, Schedule, SchedulerEventData, ScheduleStorageEntry } from "./types";
 import { parseTimeBar } from "./data/time/parse_time_bar";
 import { HomeAssistant } from "./lib/types";
 import { CARD_VERSION, defaultSingleTimerConfig, defaultTimeSchemeConfig } from "./const";
@@ -45,8 +45,17 @@ export class SchedulerCard extends LitElement {
   @state() showDiscovered: boolean = false;
 
   // Overview is the default view: a compact shared-timeline look at every
-  // schedule, versus the older one-line-per-schedule list.
+  // schedule, versus the older one-line-per-schedule list. Configurable via
+  // `default_view`.
   @state() overviewMode: boolean = true;
+
+  private get _quickAddEnabled() {
+    return this._config.show_quick_add !== false;
+  }
+
+  private get _overviewEditingEnabled() {
+    return this._config.overview_editing !== false;
+  }
 
   @state() private _overviewZoom = OVERVIEW_MIN_ZOOM;
 
@@ -68,6 +77,7 @@ export class SchedulerCard extends LitElement {
   async setConfig(userConfig: CardConfig) {
     userConfig = validateConfig(userConfig);
     this._config = { ...userConfig };
+    if (userConfig.default_view) this.overviewMode = userConfig.default_view === OverviewView.Overview;
   }
 
   async firstUpdated() {
@@ -188,10 +198,10 @@ export class SchedulerCard extends LitElement {
       }
           </div>
 
-          ${this.overviewMode ? html`<div class="clock">${this._formatClock()}</div>` : ''}
+          ${this.overviewMode && this._config.show_clock !== false ? html`<div class="clock">${this._formatClock()}</div>` : ''}
 
           <div class="header-actions">
-          ${Object.keys(this.schedules || {}).length ? html`
+          ${this._config.show_view_toggle !== false ? html`
           <ha-icon-button
             .path=${this.overviewMode ? mdiViewSequentialOutline : mdiViewDayOutline}
             .label=${this.overviewMode
@@ -222,7 +232,7 @@ export class SchedulerCard extends LitElement {
           @overview-pan=${this._handleOverviewPan}
         >
 
-    ${this.overviewMode && !this.connectionError && Object.keys(includedItems).length
+    ${this.overviewMode && !this.connectionError && (includedItems.length || this._quickAddEnabled)
         ? html`
           <scheduler-overview-ruler
             .hass=${this.hass}
@@ -253,11 +263,12 @@ export class SchedulerCard extends LitElement {
           : includedItems.map(scheduleItem => this._renderRow(scheduleItem))
       }
 
-      ${this.overviewMode && !this.connectionError && Object.keys(includedItems).length
+      ${this.overviewMode && !this.connectionError && this._quickAddEnabled
         ? html`
           <scheduler-overview-add-row
             .hass=${this.hass}
             .config=${this._config}
+            .editable=${this._overviewEditingEnabled}
             .zoom=${this._overviewZoom}
             .panPx=${this._overviewPanPx}
             .viewportWidth=${this._overviewViewportWidth}
@@ -395,6 +406,7 @@ export class SchedulerCard extends LitElement {
           .zoom=${this._overviewZoom}
           .panPx=${this._overviewPanPx}
           .viewportWidth=${this._overviewViewportWidth}
+          .editable=${this._overviewEditingEnabled}
           @editClick=${(ev: Event) => { this._handleEditClick(ev, scheduleItem) }}
         >
         </scheduler-overview-row>

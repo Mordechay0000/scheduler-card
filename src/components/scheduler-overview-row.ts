@@ -14,7 +14,9 @@ import { localize } from '../localize/localize';
 import './scheduler-overview-bar';
 import './scheduler-overview-action-panel';
 
-const SAVED_LABEL_MS = 2500;
+// How long the confirmation reads "saved" before turning into the reset
+// button. Deliberately short: the label is an acknowledgement, not a status.
+const SAVED_LABEL_MS = 500;
 
 @customElement('scheduler-overview-row')
 export class SchedulerOverviewRow extends LitElement {
@@ -26,6 +28,7 @@ export class SchedulerOverviewRow extends LitElement {
   @property({ type: Number }) zoom = 1;
   @property({ type: Number }) panPx = 0;
   @property({ type: Number }) viewportWidth = 0;
+  @property({ type: Boolean }) editable = true;
 
   @state() private _saveState: 'saved' | 'reset' | null = null;
 
@@ -93,6 +96,7 @@ export class SchedulerOverviewRow extends LitElement {
               .zoom=${this.zoom}
               .panPx=${this.panPx}
               .viewportWidth=${this.viewportWidth}
+              .editable=${this.editable}
               @slots-changed=${(ev: CustomEvent) => this._handleSlotsChanged(ev, entryIndex)}
               @slot-selected=${this._handleSlotSelected}
             ></scheduler-overview-bar>
@@ -116,7 +120,7 @@ export class SchedulerOverviewRow extends LitElement {
   // on/off buttons, so those keep going through the full dialog.
   private _renderActionPanel(slots: Timeslot[], entryIndex: number) {
     const i = this._selectedSlot;
-    if (i === null || !slots[i]) return '';
+    if (!this.editable || i === null || !slots[i]) return '';
     const action = slots[i].actions[0];
     if (action && !isOnAction(action) && !isOffAction(action)) return '';
 
@@ -166,12 +170,16 @@ export class SchedulerOverviewRow extends LitElement {
     // something to go back to even if the save itself fails.
     this._undoStack.push({ slots: this.schedule.entries[entryIndex].slots, entryIndex });
     setLastOverviewUndo(() => this._performUndo());
-    this._showSaved();
 
-    this._saveAndSet(entryIndex, ev.detail.slots);
+    this._saveAndSet(entryIndex, ev.detail.slots, true);
   }
 
-  private _saveAndSet(entryIndex: number, slots: Timeslot[]) {
+  /**
+   * Persists the slots and, for a user edit, confirms it afterwards: the
+   * "saved" label only appears once the backend has actually accepted the
+   * change, so it never claims a save that failed.
+   */
+  private _saveAndSet(entryIndex: number, slots: Timeslot[], confirm = false) {
     const entries = Object.assign([...this.schedule.entries], {
       [entryIndex]: { ...this.schedule.entries[entryIndex], slots },
     });
@@ -180,11 +188,13 @@ export class SchedulerOverviewRow extends LitElement {
     // without this the bar snaps back to the old slots on the next render.
     this.schedule = updated;
     this.dispatchEvent(new CustomEvent('scheduleChanged', { detail: { schedule: updated } }));
-    Promise.resolve(saveSchedule(this.hass, updated)).catch(e => {
-      // eslint-disable-next-line no-console
-      console.error('scheduler-card: could not save schedule', e);
-      this._saveState = null;
-    });
+    return Promise.resolve(saveSchedule(this.hass, updated))
+      .then(() => { if (confirm) this._showSaved(); })
+      .catch(e => {
+        // eslint-disable-next-line no-console
+        console.error('scheduler-card: could not save schedule', e);
+        this._clearSaveState();
+      });
   }
 
   private _showSaved() {
@@ -203,9 +213,9 @@ export class SchedulerOverviewRow extends LitElement {
   private _performUndo() {
     const previous = this._undoStack.pop();
     if (!previous) return;
-    this._saveAndSet(previous.entryIndex, previous.slots);
     if (this._undoStack.length) setLastOverviewUndo(() => this._performUndo());
     else this._clearSaveState();
+    this._saveAndSet(previous.entryIndex, previous.slots);
   }
 
   // "Reset": discard every overview edit made since the card was opened,
@@ -214,8 +224,8 @@ export class SchedulerOverviewRow extends LitElement {
     const original = this._undoStack[0];
     if (!original) return;
     this._undoStack = [];
-    this._saveAndSet(original.entryIndex, original.slots);
     this._clearSaveState();
+    this._saveAndSet(original.entryIndex, original.slots);
   }
 
   private _clearSaveState() {
@@ -291,27 +301,30 @@ export class SchedulerOverviewRow extends LitElement {
            boundary time labels occupy every free spot above it, and the
            strip itself must not be covered. */
         flex: 0 0 auto;
-        font-size: 0.62rem;
+        font-size: 0.68rem;
+        font-weight: 500;
         font-family: inherit;
         line-height: 1;
-        color: var(--secondary-text-color);
-        background: var(--card-background-color);
-        border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
-        border-radius: 10px;
-        padding: 2px 7px;
+        color: var(--text-primary-color, #fff);
+        border: none;
+        border-radius: 11px;
+        padding: 4px 9px;
         cursor: default;
+        white-space: nowrap;
         z-index: 6;
       }
       .save-pill.saved {
-        color: rgb(var(--rgb-state-active-color, 67, 160, 71));
-        border-color: rgba(var(--rgb-state-active-color, 67, 160, 71), 0.5);
+        background: rgb(var(--rgb-state-active-color, 67, 160, 71));
         animation: save-pulse 1.6s ease-in-out;
         opacity: 1;
       }
       .save-pill.reset {
         cursor: pointer;
-        color: var(--primary-color);
-        border-color: rgba(var(--rgb-primary-color, 3, 169, 244), 0.5);
+        background: var(--primary-color);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+      }
+      .save-pill.reset:hover {
+        filter: brightness(1.1);
       }
       @keyframes save-pulse {
         0% { opacity: 0.35; }

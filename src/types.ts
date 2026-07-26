@@ -19,6 +19,21 @@ export interface CardConfig {
   tags?: string[] | string;
   exclude_tags?: string[] | string;
   show_add_button?: boolean;
+  /** Start in the shared-timeline overview instead of the plain list. */
+  default_view?: OverviewView;
+  /** Offer the view switcher in the card header at all. */
+  show_view_toggle?: boolean;
+  /** Live clock in the card header (overview only). */
+  show_clock?: boolean;
+  /** Edit slots straight from the overview bars (drag, create, delete). */
+  overview_editing?: boolean;
+  /** The inline "add schedule" row at the bottom of the overview. */
+  show_quick_add?: boolean;
+}
+
+export enum OverviewView {
+  Overview = 'overview',
+  List = 'list',
 }
 
 export enum EditorMode {
