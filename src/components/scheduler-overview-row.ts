@@ -8,9 +8,11 @@ import { computeDomain } from '../lib/entity';
 import { pickEntryForWeekday } from '../data/schedule/pick_entry_for_weekday';
 import { saveSchedule } from '../data/store/save_schedule';
 import { setLastOverviewUndo } from '../lib/overview_undo';
+import { isOnAction, isOffAction } from '../data/format/is_off_action';
 import { localize } from '../localize/localize';
 
 import './scheduler-overview-bar';
+import './scheduler-overview-action-panel';
 
 const SAVED_LABEL_MS = 2500;
 
@@ -26,6 +28,8 @@ export class SchedulerOverviewRow extends LitElement {
   @property({ type: Number }) viewportWidth = 0;
 
   @state() private _saveState: 'saved' | 'reset' | null = null;
+
+  @state() private _selectedSlot: number | null = null;
 
   // Every change since this card was opened, oldest first. Ctrl/Cmd+Z steps
   // back one entry; the "reset" button jumps all the way back to the first
@@ -90,13 +94,57 @@ export class SchedulerOverviewRow extends LitElement {
               .panPx=${this.panPx}
               .viewportWidth=${this.viewportWidth}
               @slots-changed=${(ev: CustomEvent) => this._handleSlotsChanged(ev, entryIndex)}
+              @slot-selected=${this._handleSlotSelected}
             ></scheduler-overview-bar>
+            ${this._renderActionPanel(entry.slots, entryIndex)}
           </div>
         </div>
       `;
     } catch (e) {
       return html``;
     }
+  }
+
+  private _handleSlotSelected(ev: CustomEvent) {
+    ev.stopPropagation();
+    this._selectedSlot = ev.detail.index;
+  }
+
+  // Same minimal action editor the add-schedule flow offers, for a slot of
+  // an existing schedule. Only shown for plain on/off actions: anything
+  // richer (scripts, climate setpoints, ...) would be destroyed by the
+  // on/off buttons, so those keep going through the full dialog.
+  private _renderActionPanel(slots: Timeslot[], entryIndex: number) {
+    const i = this._selectedSlot;
+    if (i === null || !slots[i]) return '';
+    const action = slots[i].actions[0];
+    if (action && !isOnAction(action) && !isOffAction(action)) return '';
+
+    const entityId = [action?.target?.entity_id || []].flat()[0]
+      || [slots.find(s => s.actions.length)?.actions[0]?.target?.entity_id || []].flat()[0];
+    if (!entityId) return '';
+
+    return html`
+      <scheduler-overview-action-panel
+        .hass=${this.hass}
+        .entityId=${entityId}
+        .action=${action}
+        @action-changed=${(ev: CustomEvent) => this._handleActionChanged(ev, slots, entryIndex)}
+      ></scheduler-overview-action-panel>
+    `;
+  }
+
+  private _handleActionChanged(ev: CustomEvent, slots: Timeslot[], entryIndex: number) {
+    ev.stopPropagation();
+    const i = this._selectedSlot;
+    if (i === null) return;
+    const newSlots = Object.assign([...slots], {
+      [i]: { ...slots[i], actions: [ev.detail.action] },
+    });
+    this._handleSlotsChanged(
+      new CustomEvent('slots-changed', { detail: { slots: newSlots } }),
+      entryIndex
+    );
   }
 
   private _handleToggle(ev: Event) {

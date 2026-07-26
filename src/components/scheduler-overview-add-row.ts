@@ -1,14 +1,14 @@
 import { LitElement, html, css, CSSResultGroup, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { mdiPlus, mdiClose, mdiCheck, mdiPower, mdiPowerOff } from '@mdi/js';
+import { mdiPlus, mdiClose, mdiCheck } from '@mdi/js';
 import { CardConfig, Action, Schedule, TConditionLogicType, TRepeatType, TWeekday, Timeslot } from '../types';
 import { HomeAssistant } from '../lib/types';
 import { computeDomain } from '../lib/entity';
-import { isOnAction } from '../data/format/is_off_action';
 import { saveSchedule } from '../data/store/save_schedule';
 import { localize } from '../localize/localize';
 
 import './scheduler-overview-bar';
+import './scheduler-overview-action-panel';
 import './scheduler-entity-picker';
 
 const conditions = () => ({ type: TConditionLogicType.Or, items: [], track_changes: false });
@@ -86,89 +86,12 @@ export class SchedulerOverviewAddRow extends LitElement {
     this._selectedSlot = ev.detail.index;
   }
 
-  private _setSelectedAction(on: boolean) {
-    if (this._selectedSlot === null || !this._entityId) return;
-    const action = on ? onAction(this._entityId) : offAction(this._entityId);
-    this._slots = Object.assign([...this._slots], {
-      [this._selectedSlot]: { ...this._slots[this._selectedSlot], actions: [action] },
-    });
-  }
-
-  // Live-update a turn_on action's parameters (brightness / colour
-  // temperature). The bar re-tints itself from these on every render, so
-  // dragging a slider previews the setting straight away.
-  private _setSelectedParam(key: string, value: number | undefined) {
+  private _handleActionChanged(ev: CustomEvent) {
     const i = this._selectedSlot;
-    if (i === null || !this._slots[i]?.actions.length) return;
-    const action = this._slots[i].actions[0];
-    const service_data: Record<string, any> = { ...action.service_data };
-    if (value === undefined) delete service_data[key];
-    else service_data[key] = value;
-    // A colour temperature and an explicit colour are mutually exclusive.
-    if (key === 'color_temp_kelvin') delete service_data.rgb_color;
+    if (i === null) return;
     this._slots = Object.assign([...this._slots], {
-      [i]: { ...this._slots[i], actions: [{ ...action, service_data }] },
+      [i]: { ...this._slots[i], actions: [ev.detail.action] },
     });
-  }
-
-  private _setSelectedColor(hex: string) {
-    const i = this._selectedSlot;
-    if (i === null || !this._slots[i]?.actions.length) return;
-    const action = this._slots[i].actions[0];
-    const rgb = [1, 3, 5].map(o => parseInt(hex.substr(o, 2), 16));
-    // A concrete colour and a colour temperature are mutually exclusive for
-    // a light; keep only the one the user just chose.
-    const service_data: Record<string, any> = { ...action.service_data, rgb_color: rgb };
-    delete service_data.color_temp_kelvin;
-    this._slots = Object.assign([...this._slots], {
-      [i]: { ...this._slots[i], actions: [{ ...action, service_data }] },
-    });
-  }
-
-  private _renderParams(action: Action) {
-    if (computeDomain(action.service) !== 'light') return nothing;
-    const supported = this.hass.states[this._entityId!]?.attributes?.supported_color_modes || [];
-    const brightness = action.service_data.brightness;
-    const kelvin = action.service_data.color_temp_kelvin;
-    const supportsTemp = supported.includes('color_temp');
-    const supportsColor = ['hs', 'rgb', 'rgbw', 'rgbww', 'xy'].some(m => supported.includes(m));
-    const rgb = action.service_data.rgb_color;
-    const hex = Array.isArray(rgb) && rgb.length >= 3
-      ? '#' + rgb.slice(0, 3).map((v: number) => Math.round(v).toString(16).padStart(2, '0')).join('')
-      : '#ffb46b';
-
-    return html`
-      <div class="params">
-        <label>
-          <span>${localize('ui.panel.overview.brightness', this.hass)}</span>
-          <input
-            type="range" min="1" max="255"
-            .value=${String(brightness ?? 255)}
-            @input=${(ev: Event) => this._setSelectedParam('brightness', Number((ev.target as HTMLInputElement).value))}
-          />
-        </label>
-        ${supportsTemp ? html`
-          <label>
-            <span>${localize('ui.panel.overview.color_temp', this.hass)}</span>
-            <input
-              type="range" min="2000" max="6500" step="100"
-              .value=${String(kelvin ?? 4000)}
-              @input=${(ev: Event) => this._setSelectedParam('color_temp_kelvin', Number((ev.target as HTMLInputElement).value))}
-            />
-          </label>
-        ` : nothing}
-        ${supportsColor ? html`
-          <label>
-            <span>${localize('ui.panel.overview.color', this.hass)}</span>
-            <input
-              type="color"
-              .value=${hex}
-              @input=${(ev: Event) => this._setSelectedColor((ev.target as HTMLInputElement).value)}
-            />
-          </label>
-        ` : nothing}
-      </div>
-    `;
   }
 
   private async _save() {
@@ -193,9 +116,6 @@ export class SchedulerOverviewAddRow extends LitElement {
     if (!this.hass) return html``;
 
     const selected = this._selectedSlot;
-    const currentOn = selected !== null && this._slots[selected]?.actions.length
-      ? isOnAction(this._slots[selected].actions[0])
-      : null;
 
     return html`
       <div class="row">
@@ -237,27 +157,12 @@ export class SchedulerOverviewAddRow extends LitElement {
               @slot-selected=${this._handleSlotSelected}
             ></scheduler-overview-bar>
             ${selected !== null ? html`
-              <div class="action-panel">
-                <div class="act-group">
-                  <button
-                    class="act on ${currentOn ? 'active' : ''}"
-                    @click=${() => this._setSelectedAction(true)}
-                  >
-                    <ha-svg-icon .path=${mdiPower}></ha-svg-icon>
-                    ${localize('ui.panel.overview.turn_on', this.hass)}
-                  </button>
-                  <button
-                    class="act off ${currentOn === false ? 'active' : ''}"
-                    @click=${() => this._setSelectedAction(false)}
-                  >
-                    <ha-svg-icon .path=${mdiPowerOff}></ha-svg-icon>
-                    ${localize('ui.panel.overview.turn_off', this.hass)}
-                  </button>
-                </div>
-                ${currentOn && this._slots[selected]?.actions.length
-        ? this._renderParams(this._slots[selected].actions[0])
-        : nothing}
-              </div>
+              <scheduler-overview-action-panel
+                .hass=${this.hass}
+                .entityId=${this._entityId!}
+                .action=${this._slots[selected]?.actions[0]}
+                @action-changed=${this._handleActionChanged}
+              ></scheduler-overview-action-panel>
             ` : nothing}
           ` : nothing}
         </div>
@@ -336,76 +241,6 @@ export class SchedulerOverviewAddRow extends LitElement {
         flex: 1;
         min-width: 0;
         position: relative;
-      }
-      /* One panel directly under the selected slot's bar: the action and
-         its settings read as a single popover attached to that slot,
-         rather than controls scattered around the bar. */
-      .action-panel {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 8px 14px;
-        margin-top: 8px;
-        padding: 7px 10px;
-        border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
-        border-radius: 10px;
-        background: var(--card-background-color);
-      }
-      .act-group {
-        display: flex;
-        gap: 4px;
-      }
-      .act {
-        display: flex;
-        align-items: center;
-        gap: 2px;
-        font-family: inherit;
-        font-size: 0.62rem;
-        border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
-        border-radius: 12px;
-        padding: 1px 8px 1px 4px;
-        cursor: pointer;
-        background: var(--card-background-color);
-        color: var(--secondary-text-color);
-      }
-      .act ha-svg-icon {
-        --mdc-icon-size: 13px;
-      }
-      .act.on.active {
-        background: rgb(var(--rgb-state-active-color, 67, 160, 71));
-        border-color: transparent;
-        color: var(--text-primary-color, #fff);
-      }
-      .act.off.active {
-        background: rgb(211, 47, 47);
-        border-color: transparent;
-        color: var(--text-primary-color, #fff);
-      }
-      .params {
-        display: flex;
-        gap: 14px;
-        align-items: center;
-        flex-wrap: wrap;
-      }
-      .params label {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-        font-size: 0.62rem;
-        color: var(--secondary-text-color);
-      }
-      .params input[type='range'] {
-        width: 92px;
-        accent-color: var(--primary-color);
-      }
-      .params input[type='color'] {
-        width: 26px;
-        height: 18px;
-        padding: 0;
-        border: 1px solid var(--divider-color, rgba(127, 127, 127, 0.5));
-        border-radius: 4px;
-        background: none;
-        cursor: pointer;
       }
     `;
   }
