@@ -8,6 +8,8 @@ import { computeDomain } from '../lib/entity';
 import { pickEntryForWeekday } from '../data/schedule/pick_entry_for_weekday';
 import { entryAppliesOn } from '../data/schedule/entry_applies_on';
 import { saveSchedule } from '../data/store/save_schedule';
+import { updateSchedule } from '../data/store/update_schedule';
+import { handleWebsocketError } from '../data/store/handle_websocket_error';
 import { setLastOverviewUndo } from '../lib/overview_undo';
 import { isOnAction, isOffAction } from '../data/format/is_off_action';
 import { mdiContentCopy } from '@mdi/js';
@@ -237,12 +239,13 @@ export class SchedulerOverviewRow extends LitElement {
     // without this the bar snaps back to the old slots on the next render.
     this.schedule = updated;
     this.dispatchEvent(new CustomEvent('scheduleChanged', { detail: { schedule: updated } }));
-    return Promise.resolve(saveSchedule(this.hass, updated))
+    // An existing schedule must go to scheduler/edit; scheduler/add is for
+    // creating one, and the backend rejects it when the id already exists.
+    return Promise.resolve(updateSchedule(this.hass, updated as Schedule & { schedule_id: string }))
       .then(() => { if (confirm) this._showSaved(); })
       .catch(e => {
-        // eslint-disable-next-line no-console
-        console.error('scheduler-card: could not save schedule', e);
         this._clearSaveState();
+        handleWebsocketError(e, this, this.hass);
       });
   }
 

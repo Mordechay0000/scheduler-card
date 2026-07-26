@@ -20,7 +20,9 @@ export const HASS_STUB = `{
   },
   callApi: (method, endpoint, data) => {
     window.__apiCalls = window.__apiCalls || [];
-    window.__apiCalls.push(data);
+    // The endpoint matters: scheduler/add creates, scheduler/edit updates,
+    // and the backend rejects the wrong one.
+    window.__apiCalls.push({ method, endpoint, data });
     return Promise.resolve(true);
   },
   callWS: () => Promise.resolve({}),
@@ -145,6 +147,16 @@ export async function dragBy(page, from, dx) {
   await page.mouse.down();
   await page.mouse.move(from.x + dx, from.y, { steps: 6 });
   await page.mouse.up();
+}
+
+/** Endpoints the card has POSTed to, in order. */
+export function apiEndpoints(page) {
+  return page.evaluate(() => (window.__apiCalls || []).map(c => c.endpoint));
+}
+
+/** Payload of the nth API call. */
+export function apiPayload(page, index = 0) {
+  return page.evaluate(i => (window.__apiCalls || [])[i]?.data, index);
 }
 
 export function slotTimes(page, rowId) {

@@ -10,8 +10,9 @@ const PAGE = buildPage({
       'light.living_room': { entity_id:'light.living_room', attributes:{ friendly_name:'תאורת סלון' } },
     });
     // Deliberately slow so the test can observe the in-flight window.
-    window.__hass.callApi = (m, e, d) => {
-      window.__apiCalls = window.__apiCalls || []; window.__apiCalls.push(d);
+    window.__hass.callApi = (method, endpoint, data) => {
+      window.__apiCalls = window.__apiCalls || [];
+      window.__apiCalls.push({ method, endpoint, data });
       return new Promise(r => setTimeout(() => r(true), 300));
     };
     const r = document.getElementById('row1');

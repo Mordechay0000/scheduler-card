@@ -1,4 +1,4 @@
-import { Suite, buildPage, withPage, segCentre } from './harness.mjs';
+import { Suite, buildPage, withPage, segCentre, apiEndpoints, apiPayload } from './harness.mjs';
 
 const PAGE = buildPage({
   body: `
@@ -64,7 +64,8 @@ export default async function run() {
     s.ok(await page.evaluate(() =>
       document.getElementById('row1').schedule.entries[0].slots[1].actions[0].service_data.brightness) === 90,
       'moving the brightness slider writes to the schedule');
-    s.ok(await page.evaluate(() => (window.__apiCalls || []).length) > 0, 'the change is persisted');
+    s.ok((await apiEndpoints(page)).includes('scheduler/edit'),
+      'editing an existing schedule goes to scheduler/edit');
     s.ok(await page.evaluate(() => !!document.getElementById('row1').shadowRoot.querySelector('.save-pill')),
       'it goes through the same save/undo path as a drag');
 
@@ -110,8 +111,9 @@ export default async function run() {
 
     await page.evaluate(() => { window.__apiCalls = []; document.getElementById('add').shadowRoot.querySelector('.confirm').click(); });
     await page.waitForTimeout(300);
-    const saved = await page.evaluate(() => window.__apiCalls[0]);
-    s.ok(!!saved && saved.schedule_id === undefined, 'saving the draft creates a new schedule');
+    const saved = await apiPayload(page, 0);
+    s.ok((await apiEndpoints(page))[0] === 'scheduler/add', 'saving a new draft goes to scheduler/add');
+    s.ok(!!saved && saved.schedule_id === undefined, 'the new schedule is sent without a schedule_id');
     s.ok(saved.timeslots[saved.timeslots.length - 1].stop === '00:00:00',
       'end of day is written as 00:00:00, the form the backend expects');
     s.ok(await page.evaluate(() => document.getElementById('add')._entityId) === null, 'the add row resets after saving');

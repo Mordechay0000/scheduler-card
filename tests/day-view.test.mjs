@@ -1,4 +1,4 @@
-import { Suite, buildPage, withPage, segCentre, slotTimes } from './harness.mjs';
+import { Suite, buildPage, withPage, segCentre, slotTimes, apiEndpoints, apiPayload } from './harness.mjs';
 
 // 6 Jan 2026 is a Tuesday, so a Friday-only schedule must read as "not today".
 const PAGE = buildPage({
@@ -93,8 +93,9 @@ export default async function run() {
       document.getElementById('daily').shadowRoot.querySelector('.duplicate').click();
     });
     await page.waitForTimeout(250);
-    const copy = await page.evaluate(() => window.__apiCalls[0]);
-    s.ok(!!copy && copy.schedule_id === undefined, 'duplicating saves a copy with no schedule_id');
+    const copy = await apiPayload(page, 0);
+    s.ok((await apiEndpoints(page))[0] === 'scheduler/add', 'duplicating creates via scheduler/add');
+    s.ok(!!copy && copy.schedule_id === undefined, 'the duplicate carries no schedule_id');
 
     // Two-day comparison view.
     await page.evaluate(() => {

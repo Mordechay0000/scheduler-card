@@ -1,4 +1,4 @@
-import { Suite, buildPage, withPage, segCentre, dragBy, slotTimes } from './harness.mjs';
+import { Suite, buildPage, withPage, segCentre, dragBy, slotTimes, apiEndpoints } from './harness.mjs';
 
 // Two rows sharing a ruler, the same arrangement overview mode renders.
 const PAGE = buildPage({
@@ -72,7 +72,10 @@ export default async function run() {
     await page.waitForTimeout(250);
     const edited = await slotTimes(page, 'row1');
     s.ok(edited !== original, `dragging the slot body resizes it (${original} -> ${edited})`);
-    s.ok(await page.evaluate(() => (window.__apiCalls || []).length) > 0, 'the resize is persisted');
+    const endpoints = await apiEndpoints(page);
+    s.ok(endpoints.length > 0, 'the resize is persisted');
+    s.ok(endpoints.every(e => e === 'scheduler/edit'),
+      `an existing schedule is updated via scheduler/edit, never scheduler/add (${endpoints.join(', ')})`);
 
     // A second consecutive drag must also commit. This used to be swallowed by
     // the browser starting a native drag, which cancels the pointer sequence.
