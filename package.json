@@ -8,7 +8,9 @@
     "rollup": "rollup -c",
     "lint": "eslint src/**/*.ts --fix",
     "format": "prettier --write '**/*.ts'",
-    "start": "rollup -c --watch"
+    "start": "rollup -c --watch",
+    "test": "node tests/run.mjs",
+    "test:build": "npm run rollup && node tests/run.mjs"
   },
   "repository": {
     "type": "git",
@@ -42,6 +44,7 @@
   "devDependencies": {
     "@parcel/transformer-inline-string": "^2.8.3",
     "@rollup/plugin-dynamic-import-vars": "^2.1.2",
-    "parcel": "^2.8.3"
+    "parcel": "^2.8.3",
+    "playwright": "1.56.1"
   }
 }

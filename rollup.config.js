@@ -11,7 +11,10 @@ const plugins = [
   commonjs({
     include: 'node_modules/**',
   }),
-  typescript(),
+  // The plugin's default include patterns ('*.ts+(|x)') match nothing under
+  // the installed picomatch, so every .ts file was silently handed to the
+  // JS parser instead of TypeScript. Spell the patterns out explicitly.
+  typescript({ include: ['*.ts', '**/*.ts', '*.tsx', '**/*.tsx'] }),
   json(),
   visualizer(),
   terser(),

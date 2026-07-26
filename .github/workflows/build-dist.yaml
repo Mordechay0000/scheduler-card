@@ -1,0 +1,55 @@
+name: Build dist
+
+# Keeps dist/scheduler-card.js in step with src/.
+#
+# That file is what installations actually load, and the Build workflow only
+# attaches it to a published release - it never compiles it. Without this,
+# pushing source changes alone leaves everyone running the previous build.
+#
+# The path filter means the commit this job makes (which touches only dist/)
+# cannot retrigger the workflow.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'rollup.config.js'
+      - 'tsconfig.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-dist-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        run: npm run rollup
+
+      - name: Commit the bundle if it changed
+        run: |
+          if git diff --quiet -- dist/scheduler-card.js; then
+            echo "dist/scheduler-card.js is already up to date."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --force dist/scheduler-card.js
+          git commit -m "Build dist/scheduler-card.js for ${GITHUB_SHA::7}"
+          git push
