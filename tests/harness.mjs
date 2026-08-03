@@ -14,6 +14,8 @@ export const HASS_STUB = `{
   language: 'he',
   locale: { time_format: 'twenty_four', language: 'he' },
   states: {},
+  // Real hass always provides this; several components fall back to it.
+  localize: key => key,
   callService: (domain, service, data) => {
     window.__serviceCalls = window.__serviceCalls || [];
     window.__serviceCalls.push({ domain, service, data });
@@ -26,6 +28,7 @@ export const HASS_STUB = `{
     return Promise.resolve(true);
   },
   callWS: () => Promise.resolve({}),
+  loadBackendTranslation: () => Promise.resolve({}),
 }`;
 
 const THEME_VARS = `

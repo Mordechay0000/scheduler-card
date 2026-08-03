@@ -119,6 +119,24 @@ export default async function run() {
     s.ok(await page.evaluate(() =>
       !document.getElementById('ruler').shadowRoot.querySelector('.zoom-controls')),
       'zoom is withheld in the comparison view');
+
+    // The ruler exists to label the bars, so its day boundary has to fall
+    // exactly where the bars meet - any gap between them drifts the ticks.
+    const seam = await page.evaluate(() => {
+      const bars = document.getElementById('daily').shadowRoot.querySelectorAll('scheduler-overview-bar');
+      const first = bars[0].getBoundingClientRect();
+      const second = bars[1].getBoundingClientRect();
+      const rulerBox = document.getElementById('ruler').shadowRoot.querySelector('.ruler').getBoundingClientRect();
+      // Direction-agnostic: under RTL the first day sits on the right, so the
+      // seam is whichever pair of edges is adjacent.
+      const gapLtr = Math.abs(first.right - second.left);
+      const gapRtl = Math.abs(second.right - first.left);
+      const seamAt = gapRtl < gapLtr ? second.right : first.right;
+      return { barsSeam: seamAt, rulerMid: rulerBox.left + rulerBox.width / 2, gap: Math.min(gapLtr, gapRtl) };
+    });
+    s.ok(seam.gap < 0.5, `the two day bars meet with no layout gap (${seam.gap.toFixed(2)}px)`);
+    s.ok(Math.abs(seam.barsSeam - seam.rulerMid) < 1.5,
+      `the ruler's day boundary lines up with where the bars meet (${Math.abs(seam.barsSeam - seam.rulerMid).toFixed(2)}px apart)`);
   });
 
   return s;

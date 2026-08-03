@@ -5,6 +5,7 @@ import { CardConfig, Action, Schedule, TConditionLogicType, TRepeatType, TWeekda
 import { HomeAssistant } from '../lib/types';
 import { computeDomain } from '../lib/entity';
 import { saveSchedule } from '../data/store/save_schedule';
+import { handleWebsocketError } from '../data/store/handle_websocket_error';
 import { localize } from '../localize/localize';
 
 import './scheduler-overview-bar';
@@ -108,6 +109,9 @@ export class SchedulerOverviewAddRow extends LitElement {
     try {
       await saveSchedule(this.hass, schedule);
       this._reset();
+    } catch (e) {
+      // Keep the draft on screen so the work is not lost, and say why.
+      handleWebsocketError(e as any, this, this.hass);
     } finally {
       this._saving = false;
     }

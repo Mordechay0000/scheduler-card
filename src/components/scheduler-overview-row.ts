@@ -68,7 +68,10 @@ export class SchedulerOverviewRow extends LitElement {
       const nextDate = new Date(baseDate.getTime() + 24 * 3600 * 1000);
       const next = this.spanDays === 2 ? pickEntryForWeekday(this.schedule.entries, nextDate) : null;
       const nextApplies = next ? entryAppliesOn(next.entry, nextDate) : false;
-      const halfWidth = this.spanDays === 2 ? Math.max(0, (this.viewportWidth - 6) / 2) : this.viewportWidth;
+      // Exactly half each: the ruler splits its width 50/50, and any gap here
+      // would drift the bars away from the hour ticks labelling them. The day
+      // divider is drawn as an overlay instead, taking no layout space.
+      const halfWidth = this.spanDays === 2 ? this.viewportWidth / 2 : this.viewportWidth;
       const firstAction = entry.slots.find(e => e.actions.length)?.actions[0];
 
       let icon = 'mdi:calendar-clock';
@@ -199,7 +202,8 @@ export class SchedulerOverviewRow extends LitElement {
     const copy = { ...this.schedule } as Partial<Schedule>;
     delete copy.schedule_id;
     delete copy.entity_id;
-    saveSchedule(this.hass, copy as Schedule);
+    Promise.resolve(saveSchedule(this.hass, copy as Schedule))
+      .catch(e => handleWebsocketError(e, this, this.hass));
   }
 
   private _handleToggle(ev: Event) {
@@ -238,10 +242,12 @@ export class SchedulerOverviewRow extends LitElement {
     // Hold the edit locally too: the backend round-trip is asynchronous, and
     // without this the bar snaps back to the old slots on the next render.
     this.schedule = updated;
-    this.dispatchEvent(new CustomEvent('scheduleChanged', { detail: { schedule: updated } }));
     // An existing schedule must go to scheduler/edit; scheduler/add is for
     // creating one, and the backend rejects it when the id already exists.
-    return Promise.resolve(updateSchedule(this.hass, updated as Schedule & { schedule_id: string }))
+    const write = updated.schedule_id
+      ? updateSchedule(this.hass, updated as Schedule & { schedule_id: string })
+      : saveSchedule(this.hass, updated);
+    return Promise.resolve(write)
       .then(() => { if (confirm) this._showSaved(); })
       .catch(e => {
         this._clearSaveState();
@@ -364,7 +370,17 @@ export class SchedulerOverviewRow extends LitElement {
       .bar-wrap.split {
         display: flex;
         align-items: flex-end;
-        gap: 6px;
+        gap: 0;
+      }
+      .bar-wrap.split::after {
+        content: '';
+        position: absolute;
+        inset-inline-start: 50%;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: var(--divider-color, rgba(127, 127, 127, 0.5));
+        pointer-events: none;
       }
       .bar-wrap.split scheduler-overview-bar {
         flex: 1 1 0;
