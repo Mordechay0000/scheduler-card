@@ -13,16 +13,29 @@ const supportLocaleString = () => {
   return false;
 };
 
-export const computeStartOfWeek = (hass: HomeAssistant) => {
-  let startOfWeekSetting = (hass.locale as any).first_weekday;
+/**
+ * Index (0 = Sunday) of the day Home Assistant starts the week on, from the
+ * user's `first_weekday` setting, falling back to what the language implies.
+ * Never returns -1: callers rotate arrays by this, and a negative index would
+ * silently mangle the list.
+ */
+export const computeStartOfWeek = (hass: HomeAssistant): number => {
+  let startOfWeekSetting = (hass.locale as any)?.first_weekday;
 
   if (!startOfWeekSetting || startOfWeekSetting == 'language') {
     // @ts-ignore
     if ("weekInfo" in Intl.Locale.prototype) {
-      // @ts-ignore
-      return new Intl.Locale(hass.locale.language).weekInfo.firstDay % 7;
+      try {
+        // @ts-ignore
+        const info = new Intl.Locale(hass.locale.language).weekInfo
+          // @ts-ignore
+          || new Intl.Locale(hass.locale.language).getWeekInfo?.();
+        if (info?.firstDay) return info.firstDay % 7;
+      } catch (e) {
+        /* locale without week info: fall through to the language table */
+      }
     }
-    else {
+    {
       const regionSat = 'AEAFBHDJDZEGIQIRJOKWLYOMQASDSY'.match(/../g)!;
       const regionSun = 'AGARASAUBDBRBSBTBWBZCACNCODMDOETGTGUHKHNIDILINJMJPKEKHKRLAMHMMMOMTMXMZNINPPAPEPHPKPRPTPYSASGSVTHTTTWUMUSVEVIWSYEZAZW'.match(/../g)!;
       const languageSat = ['ar', 'arq', 'arz', 'fa'];
@@ -36,8 +49,10 @@ export const computeStartOfWeek = (hass: HomeAssistant) => {
     }
   }
   else {
-    return weekdayList.map(e => e.toLowerCase()).findIndex(e => e == startOfWeekSetting);
+    const index = weekdayList.map(e => e.toLowerCase()).findIndex(e => e == startOfWeekSetting);
+    if (index >= 0) return index;
   }
+  return 1; // Monday, Home Assistant's own default
 }
 
 const findSequences = (list: number[]) => {

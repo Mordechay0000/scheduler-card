@@ -57,10 +57,10 @@ export default async function run() {
 
     s.ok(await page.evaluate(() =>
       document.getElementById('daybar').shadowRoot.querySelectorAll('.day').length) === 7,
-      'the day picker offers a rolling week');
+      'the day picker offers a full week');
     s.ok(await page.evaluate(() =>
       !!document.getElementById('daybar').shadowRoot.querySelector('.day.today')),
-      'the week starts at today');
+      'today is marked within the week');
 
     // "Now" marker, positioned from the right under RTL.
     await page.evaluate(() => { document.getElementById('daily').now = new Date(2026, 0, 6, 13, 20); });

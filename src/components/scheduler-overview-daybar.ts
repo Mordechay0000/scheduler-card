@@ -1,6 +1,7 @@
 import { LitElement, html, css, CSSResultGroup } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { HomeAssistant } from '../lib/types';
+import { computeStartOfWeek } from '../data/days';
 import { localize } from '../localize/localize';
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -36,9 +37,12 @@ export class SchedulerOverviewDaybar extends LitElement {
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    // A rolling week starting today, so "today" is always the first chip
-    // and the days ahead read left-to-right from it.
-    const days = Array.from({ length: 7 }, (_, i) => new Date(today.getTime() + i * DAY_MS));
+    // The week Home Assistant itself starts on, so these chips read in the
+    // same order as the weekday picker and the rest of the frontend.
+    const startOfWeek = computeStartOfWeek(this.hass);
+    const offset = (today.getDay() - startOfWeek + 7) % 7;
+    const weekStart = new Date(today.getTime() - offset * DAY_MS);
+    const days = Array.from({ length: 7 }, (_, i) => new Date(weekStart.getTime() + i * DAY_MS));
     const selected = new Date(this.date);
     selected.setHours(0, 0, 0, 0);
 
@@ -48,12 +52,11 @@ export class SchedulerOverviewDaybar extends LitElement {
           ${days.map(day => {
       const isSelected = day.getTime() === selected.getTime();
       const isToday = day.getTime() === today.getTime();
-      const label = isToday
-        ? localize('ui.panel.overview.today', this.hass)
-        : day.toLocaleDateString(this.hass.locale?.language || undefined, { weekday: 'short' });
+      const label = day.toLocaleDateString(this.hass.locale?.language || undefined, { weekday: 'short' });
       return html`
               <button
                 class="day ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''}"
+                title=${isToday ? localize('ui.panel.overview.today', this.hass) : ''}
                 @click=${() => this._select(day)}
               >${label}</button>
             `;
@@ -94,9 +97,15 @@ export class SchedulerOverviewDaybar extends LitElement {
         cursor: pointer;
         white-space: nowrap;
       }
+      /* Today keeps its place in the week rather than jumping to the front,
+         so it needs marking out. */
       .day.today {
-        font-weight: 600;
+        font-weight: 700;
         color: var(--primary-text-color);
+        border-color: var(--primary-color);
+      }
+      .day.today.selected {
+        color: var(--text-primary-color, #fff);
       }
       .day.selected {
         background: var(--primary-color);
